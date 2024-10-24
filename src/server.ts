@@ -92,7 +92,6 @@ app.get('/api/getMessages', async (req, res) => {
 });
 
 app.post('/api/postMessage', async (req, res): Promise<any> => {
-    console.log('hello')
     const { chat_id, user_id, message } = req.body;
     try {
         const insertResult = await pool.query(
