@@ -1,9 +1,12 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors'
 import { Message } from './messageModel';
+import jwt, { JwtPayload } from 'jsonwebtoken';
 
 const app = express();
 const PORT = process.env.PORT || 5002;
+const jwtSecret = process.env.JWT_SECRET;
+
 const { pool } = require("./database");
 const {
     createUsersTable,
@@ -139,14 +142,18 @@ app.post('/api/login', async (req, res): Promise<any> => {
         const result = await pool.query('SELECT * FROM users WHERE username = $1', [body.username]);
         const user = result.rows[0];
         
-        if (!user) {
-            return res.status(401).json({ message: 'Username not found' });
-        }
+        if (!user) return res.status(401).json({ message: 'Username not found' });
+        if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+    
 
         // Check if the provided password matches the stored password
         if (body.password === user.password) {
-            // Successful login, return user information
-            res.status(200).json({ id: user.id, username: user.username });
+            const token = jwt.sign(
+                { userId: user.id, username: user.username },
+                jwtSecret,
+                { expiresIn: '1h' }
+              );
+            res.status(200).json({ token });
         } else {
             res.status(401).json({ message: 'Invalid password.' });
         }
