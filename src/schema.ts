@@ -7,7 +7,8 @@ const createUsersTable = async() => {
                 id SERIAL PRIMARY KEY,
                 username VARCHAR(50) NOT NULL,
                 password VARCHAR(100) NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                role VARCHAR(50) DEFAULT 'user'
             );
         `);
         console.log('users table created')

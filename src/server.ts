@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import cors from 'cors'
 import { Message } from './messageModel';
 import jwt, { JwtPayload } from 'jsonwebtoken';
+import 'dotenv/config'
 
 const app = express();
 const PORT = process.env.PORT || 5002;
@@ -32,7 +33,48 @@ initialiseDatabase().then(() => {
     console.error("Error initialising database tables", err);
 });
 
-app.get('/api/getUsers', async (req, res) => {
+// Retrieves all the users the current user is not chatting with
+app.get('/api/getUsers', async (req, res): Promise<any> => {
+    const token = req.headers['authorization']?.split(' ')[1];
+
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+    
+    try {
+        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+        const currentUserId = decoded.userId;
+
+        if (!currentUserId) {
+            return res.status(401).json({ error: 'Invalid token' });
+        }
+
+        const query = `
+            SELECT id AS "userId", username 
+            FROM users 
+            WHERE id != $1
+              AND id NOT IN (
+                  SELECT user_id 
+                  FROM chat_users 
+                  WHERE chat_id IN (
+                      SELECT chat_id 
+                      FROM chat_users 
+                      WHERE user_id = $1
+                  )
+              );
+        `;
+
+        const result = await pool.query(query, [currentUserId]);
+        const data = result.rows;
+
+        res.status(200).json(data);
+    } catch (err) {
+        console.error('Error fetching users:', err);
+        res.status(500).json({ error: 'Error fetching users' });
+    }
+});
+
+// Retrieves all the users to check for duplicate names during registeration
+app.get('/api/getAllUsers', async (req, res) => {
     try {
         const result = await pool.query(`SELECT username, id FROM users`);
         const data = result.rows;
@@ -44,23 +86,34 @@ app.get('/api/getUsers', async (req, res) => {
     }
 });
 
-app.post('/api/startChat', async (req, res) => {
-    const { currentUserId, recipientUserId, recipientUsername } = req.body;
+app.post('/api/startChat', async (req, res): Promise<any> => {
+    const token = req.headers['authorization']?.split(' ')[1];
+    const { userId, username } = req.body;
+
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+
     try {
+        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+        const currentUserId = decoded.userId;
+
+        if (!currentUserId) {
+            return res.status(401).json({ message: 'Token is missing user ID' });
+        }
+
         const chatResult = await pool.query(`
             INSERT INTO chats (title, is_group_chat)
             VALUES ($1, false)
             RETURNING id
-        `, [recipientUsername]);
+        `, [username]);
 
         const chatId = chatResult.rows[0].id;
 
         const insertResult = await pool.query(`
             INSERT INTO chat_users (chat_id, user_id)
             VALUES ($1, $2), ($1, $3)
-        `, [chatId, currentUserId, recipientUserId]);
+        `, [chatId, currentUserId, userId]);
 
-        // 3. Respond with the new chat ID
         res.status(201).json(insertResult.rows[0]);
     } catch (err) {
         console.error('Error starting chat:', err);
@@ -95,11 +148,23 @@ app.get('/api/getMessages', async (req, res) => {
 });
 
 app.post('/api/postMessage', async (req, res): Promise<any> => {
-    const { chat_id, user_id, message } = req.body;
+    const token = req.headers['authorization']?.split(' ')[1];
+    const { chatId, message } = req.body;
+
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+
     try {
+        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+        const currentUserId = decoded.userId;
+
+        if (!currentUserId) {
+            return res.status(401).json({ message: 'Token is missing user ID' });
+        }
+
         const insertResult = await pool.query(
             'INSERT INTO messages (chat_id, user_id, message) VALUES ($1, $2, $3) RETURNING *',
-            [chat_id, user_id, message]
+            [chatId, currentUserId, message]
         );
         res.status(201).json(insertResult.rows[0]);
     } catch (err) {
@@ -133,6 +198,7 @@ app.post('/api/register', async (req, res): Promise<any> => {
 });
 
 app.post('/api/login', async (req, res): Promise<any> => {
+
     const body = {
         username: req.body.username,
         password: req.body.password,
@@ -143,13 +209,11 @@ app.post('/api/login', async (req, res): Promise<any> => {
         const user = result.rows[0];
         
         if (!user) return res.status(401).json({ message: 'Username not found' });
-        if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
-    
+        if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' })
 
-        // Check if the provided password matches the stored password
         if (body.password === user.password) {
             const token = jwt.sign(
-                { userId: user.id, username: user.username },
+                { userId: user.id, username: user.username, role: user.role },
                 jwtSecret,
                 { expiresIn: '1h' }
               );
@@ -163,9 +227,22 @@ app.post('/api/login', async (req, res): Promise<any> => {
     }
 });
 
-app.get('/api/getUserChat', async (req, res) => {
-    const { userId } = req.query;
+// Retrieves all the users the current user is chatting too
+app.get('/api/getUserChat', async (req, res): Promise<any> => {
+    const token = req.headers['authorization']?.split(' ')[1];
+
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+
     try {
+        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+        const userId = decoded.userId;
+        
+        if (!userId) {
+            return res.status(401).json({ message: 'Token is missing user ID' });
+        }
+        
+        // Query for chat data
         const data = await pool.query(`
             SELECT cu.chat_id, u.id AS user_id, u.username
             FROM chat_users cu
@@ -184,8 +261,13 @@ app.get('/api/getUserChat', async (req, res) => {
         }));
         res.status(200).json(usersWithChats);
     } catch (err) {
-        console.error('Error fetching user chats:', err);
-        res.status(500).json({ error: 'Error fetching user chats' });
+        console.error('Error during token verification or database query:', err);
+
+        if (err instanceof jwt.JsonWebTokenError || err instanceof jwt.TokenExpiredError) {
+            return res.status(401).json({ message: 'Invalid or expired token' });
+        }
+
+        res.status(500).json({ message: 'Error fetching users chats' });
     }
 });
 
