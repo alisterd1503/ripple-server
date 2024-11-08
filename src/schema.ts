@@ -8,7 +8,8 @@ const createUsersTable = async() => {
                 username VARCHAR(50) NOT NULL,
                 password VARCHAR(100) NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                role VARCHAR(50) DEFAULT 'user'
+                role VARCHAR(50) DEFAULT 'user',
+                bio VARCHAR(100) DEFAULT 'Hey there! I am using ChatApp'
             );
         `);
         console.log('users table created')

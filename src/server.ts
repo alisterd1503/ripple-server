@@ -66,6 +66,8 @@ app.get('/api/getUsers', async (req, res): Promise<any> => {
         const result = await pool.query(query, [currentUserId]);
         const data = result.rows;
 
+        console.log(data)
+
         res.status(200).json(data);
     } catch (err) {
         console.error('Error fetching users:', err);
@@ -242,11 +244,23 @@ app.get('/api/getUserChat', async (req, res): Promise<any> => {
             return res.status(401).json({ message: 'Token is missing user ID' });
         }
         
-        // Query for chat data
+        // Query for chat data including last message and last message time
         const data = await pool.query(`
-            SELECT cu.chat_id, u.id AS user_id, u.username
+            SELECT 
+                cu.chat_id, 
+                u.id AS user_id, 
+                u.username,
+                m.message AS lastMessage,
+                m.created_at AS lastMessageTime
             FROM chat_users cu
             JOIN users u ON cu.user_id = u.id
+            LEFT JOIN LATERAL (
+                SELECT message, created_at 
+                FROM messages 
+                WHERE chat_id = cu.chat_id 
+                ORDER BY created_at DESC 
+                LIMIT 1
+            ) m ON true
             WHERE cu.chat_id IN (
                 SELECT chat_id
                 FROM chat_users
@@ -254,11 +268,15 @@ app.get('/api/getUserChat', async (req, res): Promise<any> => {
             ) AND cu.user_id != $1
         `, [userId]);
 
+        // Format response to include last message and timestamp
         const usersWithChats = data.rows.map((row: any) => ({
             chatId: row.chat_id,
             userId: row.user_id,
-            username: row.username
+            username: row.username,
+            lastMessage: row.lastmessage,
+            lastMessageTime: row.lastmessagetime
         }));
+        
         res.status(200).json(usersWithChats);
     } catch (err) {
         console.error('Error during token verification or database query:', err);
