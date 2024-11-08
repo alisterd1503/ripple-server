@@ -4,6 +4,7 @@ import { Message } from './messageModel';
 import jwt, { JwtPayload } from 'jsonwebtoken';
 import 'dotenv/config'
 import multer from 'multer';
+import validatePassword from './validatePassword';
 
 const app = express();
 const PORT = process.env.PORT || 5002;
@@ -241,12 +242,18 @@ app.post('/api/register', async (req, res): Promise<any> => {
     };
 
     try {
-        // if username already exists, return
+        // Validating Usernames
         const existingUser = await pool.query('SELECT * FROM users WHERE username = $1', [body.username]);
-        if (existingUser.rows.length > 0) {
-            return res.status(400).json({ message: 'Username already exists' });
-        }
+        if (existingUser.rows.length > 0) return res.status(400).json({ message: 'Username already exists' });
+        if ((body.username).trim().length < 1) return res.status(400).json({message: 'Username must be at least one character long.'});
+        if (/\s/.test(body.username)) return res.status(400).json({ message: 'Username cannot contain spaces.'})
 
+         // Validating Password
+         const passwordValidation = validatePassword(body.password);
+         if (!passwordValidation.valid) {
+             return res.status(400).json({ message: passwordValidation.message });
+         }
+        
         const insertResult = await pool.query(
             'INSERT INTO users (username, password) VALUES ($1, $2) RETURNING *',
             [body.username, body.password]
@@ -349,6 +356,12 @@ app.get('/api/getUserChat', async (req, res): Promise<any> => {
         res.status(500).json({ message: 'Error fetching users chats' });
     }
 });
+
+/** SETTINGS **/
+
+//route to edit username
+
+//route to edit 
 
 // Start server
 app.listen(PORT, () => {
