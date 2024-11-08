@@ -33,6 +33,35 @@ initialiseDatabase().then(() => {
     console.error("Error initialising database tables", err);
 });
 
+app.get('/api/getProfile', async (req, res): Promise<any> => {
+    const token = req.headers['authorization']?.split(' ')[1];
+
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+    
+    try {
+        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+        const currentUserId = decoded.userId;
+
+        if (!currentUserId) {
+            return res.status(401).json({ error: 'Invalid token' });
+        }
+
+        const query = `
+            SELECT bio, avatar, created_at FROM users WHERE id = $1
+        `;
+
+        const result = await pool.query(query, [currentUserId]);
+        const data = result.rows[0];
+        
+        res.status(200).json(data);
+    } catch (err) {
+        console.error('Error fetching users:', err);
+        res.status(500).json({ error: 'Error fetching users' });
+    }
+});
+
+
 // Retrieves all the users the current user is not chatting with
 app.get('/api/getUsers', async (req, res): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
@@ -65,8 +94,6 @@ app.get('/api/getUsers', async (req, res): Promise<any> => {
 
         const result = await pool.query(query, [currentUserId]);
         const data = result.rows;
-
-        console.log(data)
 
         res.status(200).json(data);
     } catch (err) {
