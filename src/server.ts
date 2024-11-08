@@ -3,10 +3,13 @@ import cors from 'cors'
 import { Message } from './messageModel';
 import jwt, { JwtPayload } from 'jsonwebtoken';
 import 'dotenv/config'
+import multer from 'multer';
 
 const app = express();
 const PORT = process.env.PORT || 5002;
 const jwtSecret = process.env.JWT_SECRET;
+const upload = multer({ dest: 'uploads/' })
+app.use('/uploads', express.static('uploads'));
 
 const { pool } = require("./database");
 const {
@@ -53,14 +56,13 @@ app.get('/api/getProfile', async (req, res): Promise<any> => {
 
         const result = await pool.query(query, [currentUserId]);
         const data = result.rows[0];
-        
+
         res.status(200).json(data);
     } catch (err) {
         console.error('Error fetching users:', err);
         res.status(500).json({ error: 'Error fetching users' });
     }
 });
-
 
 // Retrieves all the users the current user is not chatting with
 app.get('/api/getUsers', async (req, res): Promise<any> => {
@@ -202,6 +204,36 @@ app.post('/api/postMessage', async (req, res): Promise<any> => {
     }
 });
 
+app.post('/api/uploadPhoto', upload.single('avatar'), async (req, res): Promise<any> => {
+    const token = req.headers['authorization']?.split(' ')[1];
+
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+
+    try {
+        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+        const currentUserId = decoded.userId;
+        const file = req.file;
+
+        if (!file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+
+        // Here, we can save the file path or URL in the database
+        const avatarPath = `/uploads/${file.filename}`;
+        await pool.query(
+            'UPDATE users SET avatar = $1 WHERE id = $2',
+            [avatarPath, currentUserId]
+        );
+
+        // Respond with the path to the saved avatar
+        res.json({ message: 'Avatar uploaded successfully', avatarPath });
+    } catch (error) {
+        console.error('Error uploading photo:', error);
+        res.status(500).json({ error: 'Error uploading photo' });
+    }
+});
+
 app.post('/api/register', async (req, res): Promise<any> => {
     const body = {
         username: req.body.username,
@@ -277,6 +309,7 @@ app.get('/api/getUserChat', async (req, res): Promise<any> => {
                 cu.chat_id, 
                 u.id AS user_id, 
                 u.username,
+                u.avatar,
                 m.message AS lastMessage,
                 m.created_at AS lastMessageTime
             FROM chat_users cu
@@ -301,7 +334,8 @@ app.get('/api/getUserChat', async (req, res): Promise<any> => {
             userId: row.user_id,
             username: row.username,
             lastMessage: row.lastmessage,
-            lastMessageTime: row.lastmessagetime
+            lastMessageTime: row.lastmessagetime,
+            avatar: row.avatar
         }));
         
         res.status(200).json(usersWithChats);
