@@ -52,7 +52,7 @@ app.get('/api/getProfile', async (req, res): Promise<any> => {
         }
 
         const query = `
-            SELECT bio, avatar, created_at FROM users WHERE id = $1
+            SELECT username, bio, avatar, created_at FROM users WHERE id = $1
         `;
 
         const result = await pool.query(query, [currentUserId]);
@@ -62,6 +62,34 @@ app.get('/api/getProfile', async (req, res): Promise<any> => {
     } catch (err) {
         console.error('Error fetching users:', err);
         res.status(500).json({ error: 'Error fetching users' });
+    }
+});
+
+app.get('/api/getUsername', async (req, res): Promise<any> => {
+    const token = req.headers['authorization']?.split(' ')[1];
+
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+    
+    try {
+        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+        const currentUserId = decoded.userId;
+
+        if (!currentUserId) {
+            return res.status(401).json({ error: 'Invalid token' });
+        }
+
+        const query = `
+            SELECT username FROM users WHERE id = $1
+        `;
+
+        const result = await pool.query(query, [currentUserId]);
+        const data = result.rows[0];
+
+        res.status(200).json(data);
+    } catch (err) {
+        console.error('Error fetching username:', err);
+        res.status(500).json({ error: 'Error fetching username' });
     }
 });
 
@@ -344,7 +372,7 @@ app.post('/api/updateBio', async (req, res): Promise<any> => {
     try {
         if (bio.length < 1) return res.status(400).json({ message: 'Enter a bio'})
         if (bio.length > 100)return res.status(400).json({ message: 'Bio can only be 100 characters'})
-            
+
         const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
         const currentUserId = decoded.userId;
 
@@ -360,6 +388,40 @@ app.post('/api/updateBio', async (req, res): Promise<any> => {
     } catch (err) {
         console.error('Error updating bio:', err);
         res.status(500).json({ error: 'Error updating bio' });
+    }
+});
+
+// Route to update username
+app.post('/api/updateUsername', async (req, res): Promise<any> => {
+    const token = req.headers['authorization']?.split(' ')[1];
+    const { username } = req.body;
+
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+
+    try {
+        const existingUser = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+        if (existingUser.rows.length > 0) return res.status(400).json({ message: 'Username already exists' });
+        if ((username).trim().length < 1) return res.status(400).json({message: 'Minimum 1 character'});
+        if (/\s/.test(username)) return res.status(400).json({ message: 'Username cannot contain spaces.'})
+            
+        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+        const currentUserId = decoded.userId;
+
+        if (!currentUserId) {
+            return res.status(401).json({ message: 'Token is missing user ID' });
+        }
+
+        await pool.query(
+            'UPDATE users SET username = $1 WHERE id = $2',
+            [username, currentUserId]
+        );
+
+        // Send the new token or a success response
+        res.status(200).json({ message: 'Username updated successfully' });
+    } catch (err) {
+        console.error('Error updating username:', err);
+        res.status(500).json({ error: 'Error updating username' });
     }
 });
 
