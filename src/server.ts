@@ -205,36 +205,6 @@ app.post('/api/postMessage', async (req, res): Promise<any> => {
     }
 });
 
-app.post('/api/uploadPhoto', upload.single('avatar'), async (req, res): Promise<any> => {
-    const token = req.headers['authorization']?.split(' ')[1];
-
-    if (!token) return res.status(401).json({ message: 'No token provided' });
-    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
-
-    try {
-        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
-        const currentUserId = decoded.userId;
-        const file = req.file;
-
-        if (!file) {
-            return res.status(400).json({ error: 'No file uploaded' });
-        }
-
-        // Here, we can save the file path or URL in the database
-        const avatarPath = `/uploads/${file.filename}`;
-        await pool.query(
-            'UPDATE users SET avatar = $1 WHERE id = $2',
-            [avatarPath, currentUserId]
-        );
-
-        // Respond with the path to the saved avatar
-        res.json({ message: 'Avatar uploaded successfully', avatarPath });
-    } catch (error) {
-        console.error('Error uploading photo:', error);
-        res.status(500).json({ error: 'Error uploading photo' });
-    }
-});
-
 app.post('/api/register', async (req, res): Promise<any> => {
     const body = {
         username: req.body.username,
@@ -362,6 +332,63 @@ app.get('/api/getUserChat', async (req, res): Promise<any> => {
 //route to edit username
 
 //route to edit 
+
+// Route to delete profile photo
+app.post('/api/deletePhoto', async (req, res): Promise<any> => {
+    const token = req.headers['authorization']?.split(' ')[1];
+
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+
+    try {
+        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+        const currentUserId = decoded.userId;
+
+        if (!currentUserId) {
+            return res.status(401).json({ message: 'Token is missing user ID' });
+        }
+
+        await pool.query(
+            'UPDATE users SET avatar = $1 WHERE id = $2',
+            [null, currentUserId]
+        );
+        res.status(200).json({ message: 'Profile photo deleted successfully' });
+    } catch (err) {
+        console.error('Error deleting photo:', err);
+        res.status(500).json({ error: 'Error deleting photo' });
+    }
+});
+
+// Route to upload profile photo
+app.post('/api/uploadPhoto', upload.single('avatar'), async (req, res): Promise<any> => {
+    const token = req.headers['authorization']?.split(' ')[1];
+
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+
+    try {
+        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+        const currentUserId = decoded.userId;
+        const file = req.file;
+
+        if (!file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+
+        // Here, we can save the file path or URL in the database
+        const avatarPath = `/uploads/${file.filename}`;
+        await pool.query(
+            'UPDATE users SET avatar = $1 WHERE id = $2',
+            [avatarPath, currentUserId]
+        );
+
+        // Respond with the path to the saved avatar
+        res.json({ message: 'Avatar uploaded successfully', avatarPath });
+    } catch (error) {
+        console.error('Error uploading photo:', error);
+        res.status(500).json({ error: 'Error uploading photo' });
+    }
+});
 
 // Start server
 app.listen(PORT, () => {
