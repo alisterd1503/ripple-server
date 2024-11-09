@@ -333,6 +333,36 @@ app.get('/api/getUserChat', async (req, res): Promise<any> => {
 
 //route to edit 
 
+// Route to update bio
+app.post('/api/updateBio', async (req, res): Promise<any> => {
+    const token = req.headers['authorization']?.split(' ')[1];
+    const { bio } = req.body;
+
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+
+    try {
+        if (bio.length < 1) return res.status(400).json({ message: 'Enter a bio'})
+        if (bio.length > 100)return res.status(400).json({ message: 'Bio can only be 100 characters'})
+            
+        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+        const currentUserId = decoded.userId;
+
+        if (!currentUserId) {
+            return res.status(401).json({ message: 'Token is missing user ID' });
+        }
+
+        await pool.query(
+            'UPDATE users SET bio = $1 WHERE id = $2',
+            [bio, currentUserId]
+        );
+        res.status(200).json({ message: 'Bio updated successfully' });
+    } catch (err) {
+        console.error('Error updating bio:', err);
+        res.status(500).json({ error: 'Error updating bio' });
+    }
+});
+
 // Route to delete profile photo
 app.post('/api/deletePhoto', async (req, res): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
