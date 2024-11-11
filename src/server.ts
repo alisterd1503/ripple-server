@@ -366,6 +366,27 @@ app.get('/api/getUserChat', async (req, res): Promise<any> => {
     }
 });
 
+// Route to remove a friend
+app.post('/api/removeFriend', async (req, res): Promise<any> => {
+    const token = req.headers['authorization']?.split(' ')[1];
+    const body = {
+        chatId: req.body.chatId,
+    };
+
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+
+    try {
+
+        await pool.query('DELETE FROM chats WHERE id= $1', [body.chatId]);
+
+        res.status(200).json({ message: 'Friend removed successfully' });
+    } catch (err) {
+        console.error('Error removing friend:', err);
+        res.status(500).json({ error: 'Error removing friend' });
+    }
+});
+
 /** SETTINGS **/
 
 // Route to update password
