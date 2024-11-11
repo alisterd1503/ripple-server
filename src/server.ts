@@ -1,10 +1,10 @@
-import express, { Request, Response } from 'express';
+import express from 'express';
 import cors from 'cors'
-import { Message } from './messageModel';
 import jwt, { JwtPayload } from 'jsonwebtoken';
 import 'dotenv/config'
 import multer from 'multer';
 import validatePassword from './validatePassword';
+import { formatData } from './formatMessages';
 
 const app = express();
 const PORT = process.env.PORT || 5002;
@@ -181,10 +181,22 @@ app.post('/api/startChat', async (req, res): Promise<any> => {
     }
 });
 
-app.get('/api/getMessages', async (req, res) => {
+app.get('/api/getMessages', async (req, res): Promise<any> => {
     const { chatId } = req.query;
+    const token = req.headers['authorization']?.split(' ')[1];
+
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
 
     try {
+
+        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+        const currentUserId = decoded.userId;
+
+        if (!currentUserId) {
+            return res.status(401).json({ message: 'Token is missing user ID' });
+        }
+
         const data = await pool.query(`
             SELECT m.message, m.created_at, m.user_id, u.username
             FROM messages m
@@ -193,12 +205,7 @@ app.get('/api/getMessages', async (req, res) => {
             ORDER BY m.created_at ASC
         `, [chatId]);
 
-        const messages: Message[] = data.rows.map((row: { user_id: any; username: any; message: any; created_at: any; }) => ({
-            userId: row.user_id,
-            username: row.username,
-            message: row.message,
-            createdAt: row.created_at
-        }));
+        const messages = formatData(data.rows, currentUserId)
 
         res.status(200).json(messages);
     } catch (err) {
@@ -486,3 +493,7 @@ app.post('/api/uploadPhoto', upload.single('avatar'), async (req, res): Promise<
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+function formatMessages(data: any) {
+    throw new Error('Function not implemented.');
+}
+
