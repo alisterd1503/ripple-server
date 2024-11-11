@@ -318,10 +318,12 @@ app.get('/api/getUserChat', async (req, res): Promise<any> => {
         // Query for chat data including last message and last message time
         const data = await pool.query(`
             SELECT 
-                cu.chat_id, 
+                cu.chat_id,
+                cu.added_at,
                 u.id AS user_id, 
                 u.username,
                 u.avatar,
+                u.bio,
                 m.message AS lastMessage,
                 m.created_at AS lastMessageTime
             FROM chat_users cu
@@ -347,7 +349,9 @@ app.get('/api/getUserChat', async (req, res): Promise<any> => {
             username: row.username,
             lastMessage: row.lastmessage,
             lastMessageTime: row.lastmessagetime,
-            avatar: row.avatar
+            avatar: row.avatar,
+            bio: row.bio,
+            added_at: row.added_at
         }));
         
         res.status(200).json(usersWithChats);
