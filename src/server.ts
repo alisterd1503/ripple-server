@@ -364,9 +364,42 @@ app.get('/api/getUserChat', async (req, res): Promise<any> => {
 
 /** SETTINGS **/
 
-//route to edit username
+// Route to update password
+app.post('/api/changePassword', async (req, res): Promise<any> => {
+    console.log('yeh')
+    const token = req.headers['authorization']?.split(' ')[1];
+    const body = {
+        currentPassword: req.body.currentPassword,
+        newPassword: req.body.newPassword,
+        confirmPassword: req.body.confirmPassword,
+    };
 
-//route to edit 
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+
+    try {
+        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+        const currentUserId = decoded.userId;
+
+        const result = await pool.query('SELECT password FROM users WHERE id = $1', [currentUserId]);
+        const storedPassword = result.rows[0]?.password;
+
+        if (body.currentPassword !== storedPassword) {
+            return res.status(401).json({ message: 'Invalid current password' });
+        }
+
+        if (body.newPassword !== body.confirmPassword) {
+            return res.status(400).json({ message: 'Passwords do not match' });
+        }
+
+        await pool.query('UPDATE users SET password = $1 WHERE id = $2', [body.newPassword, currentUserId]);
+
+        res.status(200).json({ message: 'Password updated successfully' });
+    } catch (err) {
+        console.error('Error updating password:', err);
+        res.status(500).json({ error: 'Error updating password' });
+    }
+});
 
 // Route to update bio
 app.post('/api/updateBio', async (req, res): Promise<any> => {
