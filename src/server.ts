@@ -93,7 +93,7 @@ app.get('/api/getUsername', async (req, res): Promise<any> => {
     }
 });
 
-// Retrieves all the users the current user is not chatting with
+// Retrieves all the users and their ids
 app.get('/api/getUsers', async (req, res): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
 
@@ -108,22 +108,7 @@ app.get('/api/getUsers', async (req, res): Promise<any> => {
             return res.status(401).json({ error: 'Invalid token' });
         }
 
-        const query = `
-            SELECT id AS "userId", username 
-            FROM users 
-            WHERE id != $1
-              AND id NOT IN (
-                  SELECT user_id 
-                  FROM chat_users 
-                  WHERE chat_id IN (
-                      SELECT chat_id 
-                      FROM chat_users 
-                      WHERE user_id = $1
-                  )
-              );
-        `;
-
-        const result = await pool.query(query, [currentUserId]);
+        const result = await pool.query(`SELECT id AS "userId", username FROM users;`);
         const data = result.rows;
 
         res.status(200).json(data);
@@ -146,6 +131,7 @@ app.get('/api/getAllUsers', async (req, res) => {
     }
 });
 
+// Route to start a direct message
 app.post('/api/startChat', async (req, res): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
     const { userId, username } = req.body;
@@ -175,6 +161,59 @@ app.post('/api/startChat', async (req, res): Promise<any> => {
         `, [chatId, currentUserId, userId]);
 
         res.status(201).json(insertResult.rows[0]);
+    } catch (err) {
+        console.error('Error starting chat:', err);
+        res.status(500).json({ error: 'Error starting chat' });
+    }
+});
+
+interface UserModel {
+    userId: number;
+    username: string;
+}
+
+// Route to start group chat
+app.post('/api/startGroupChat', async (req, res): Promise<any> => {
+    const token = req.headers['authorization']?.split(' ')[1];
+    const { chosenUsers, title }: { chosenUsers: UserModel[]; title: string } = req.body;
+
+    console.log('allUsers:',chosenUsers)
+    console.log('title:',title)
+
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+
+    try {
+        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+        const currentUserId = decoded.userId;
+        
+        if (!currentUserId) return res.status(401).json({ message: 'Token is missing user ID' });
+
+        // Insert the new group chat into chats table
+        const chatResult = await pool.query(`
+            INSERT INTO chats (title, is_group_chat)
+            VALUES ($1, true)
+            RETURNING id
+        `, [title]);
+
+        const chatId = chatResult.rows[0].id;
+
+        // Add all specified users, including the current user, to the chat_users table
+        const userIds = chosenUsers.map(user => user.userId);
+        userIds.push(currentUserId);
+
+        // Create a values string for batch insert
+        const valuesString = userIds.map((_, index) => `($1, $${index + 2})`).join(", ");
+        const values = [chatId, ...userIds];
+
+        // Insert all users into chat_users
+        await pool.query(`
+            INSERT INTO chat_users (chat_id, user_id)
+            VALUES ${valuesString}
+        `, values);
+
+        // Respond with success
+        res.status(201).json({ message: 'Group chat created successfully', chatId });
     } catch (err) {
         console.error('Error starting chat:', err);
         res.status(500).json({ error: 'Error starting chat' });
@@ -300,7 +339,7 @@ app.post('/api/login', async (req, res): Promise<any> => {
     }
 });
 
-// Retrieves all the users the current user is chatting too
+// Retrieves all the chats the current user is part of, including group chats
 app.get('/api/getUserChat', async (req, res): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
 
@@ -314,11 +353,13 @@ app.get('/api/getUserChat', async (req, res): Promise<any> => {
         if (!userId) {
             return res.status(401).json({ message: 'Token is missing user ID' });
         }
-        
-        // Query for chat data including last message and last message time
+
+        // Query to fetch all chats the user is part of, with last message info
         const data = await pool.query(`
             SELECT 
-                cu.chat_id,
+                c.id AS chat_id,
+                c.title,
+                c.is_group_chat,
                 cu.added_at,
                 u.id AS user_id, 
                 u.username,
@@ -327,6 +368,7 @@ app.get('/api/getUserChat', async (req, res): Promise<any> => {
                 m.message AS lastMessage,
                 m.created_at AS lastMessageTime
             FROM chat_users cu
+            JOIN chats c ON cu.chat_id = c.id
             JOIN users u ON cu.user_id = u.id
             LEFT JOIN LATERAL (
                 SELECT message, created_at 
@@ -339,22 +381,45 @@ app.get('/api/getUserChat', async (req, res): Promise<any> => {
                 SELECT chat_id
                 FROM chat_users
                 WHERE user_id = $1
-            ) AND cu.user_id != $1
+            ) AND (c.is_group_chat = true OR cu.user_id != $1)
+            ORDER BY m.created_at DESC
         `, [userId]);
 
-        // Format response to include last message and timestamp
-        const usersWithChats = data.rows.map((row: any) => ({
-            chatId: row.chat_id,
-            userId: row.user_id,
-            username: row.username,
-            lastMessage: row.lastmessage,
-            lastMessageTime: row.lastmessagetime,
-            avatar: row.avatar,
-            bio: row.bio,
-            added_at: row.added_at
-        }));
-        
-        res.status(200).json(usersWithChats);
+        // Group chats by chat ID and format the result
+        const chats = data.rows.reduce((acc: any, row: any) => {
+            const existingChat = acc.find((chat: any) => chat.chatId === row.chat_id);
+            
+            if (existingChat) {
+                // Add user to the participants list if it's a group chat
+                if (row.is_group_chat) {
+                    existingChat.participants.push({
+                        userId: row.user_id,
+                        username: row.username,
+                        avatar: row.avatar,
+                        bio: row.bio,
+                    });
+                }
+            } else {
+                // Create a new chat object
+                acc.push({
+                    chatId: row.chat_id,
+                    title: row.title,
+                    isGroupChat: row.is_group_chat,
+                    lastMessage: row.lastmessage,
+                    lastMessageTime: row.lastmessagetime,
+                    added_at: row.added_at,
+                    participants: [{
+                        userId: row.user_id,
+                        username: row.username,
+                        avatar: row.avatar,
+                        bio: row.bio,
+                    }],
+                });
+            }
+            return acc;
+        }, []);
+
+        res.status(200).json(chats);
     } catch (err) {
         console.error('Error during token verification or database query:', err);
 
@@ -365,6 +430,7 @@ app.get('/api/getUserChat', async (req, res): Promise<any> => {
         res.status(500).json({ message: 'Error fetching users chats' });
     }
 });
+
 
 // Route to remove a friend
 app.post('/api/removeFriend', async (req, res): Promise<any> => {

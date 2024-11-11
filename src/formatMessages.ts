@@ -15,7 +15,6 @@ interface Message {
     message: string,
     createdAt: Date,
 }
-
 export const formatData = (data: any[], currentUserId: number): FormattedMessage[] => {
     return data.map((message) => {
 
