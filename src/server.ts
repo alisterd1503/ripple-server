@@ -370,7 +370,6 @@ app.get('/api/getUserChat', async (req, res): Promise<any> => {
 
 // Route to update password
 app.post('/api/changePassword', async (req, res): Promise<any> => {
-    console.log('yeh')
     const token = req.headers['authorization']?.split(' ')[1];
     const body = {
         currentPassword: req.body.currentPassword,
@@ -523,6 +522,36 @@ app.post('/api/uploadPhoto', upload.single('avatar'), async (req, res): Promise<
     } catch (error) {
         console.error('Error uploading photo:', error);
         res.status(500).json({ error: 'Error uploading photo' });
+    }
+});
+
+// Route to delete account
+app.post('/api/deleteAccount', async (req, res): Promise<any> => {
+    const token = req.headers['authorization']?.split(' ')[1];
+    const body = {
+        currentPassword: req.body.currentPassword,
+    };
+
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+
+    try {
+        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+        const currentUserId = decoded.userId;
+
+        const result = await pool.query('SELECT password FROM users WHERE id = $1', [currentUserId]);
+        const storedPassword = result.rows[0]?.password;
+
+        if (body.currentPassword !== storedPassword) {
+            return res.status(401).json({ message: 'Invalid current password' });
+        }
+
+        await pool.query('DELETE FROM users WHERE id = $1 RETURNING *', [currentUserId]);
+
+        res.status(200).json({ message: 'Account deleted successfully' });
+    } catch (err) {
+        console.error('Error deleting account:', err);
+        res.status(500).json({ error: 'Error deleting account' });
     }
 });
 
