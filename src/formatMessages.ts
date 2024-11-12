@@ -3,6 +3,7 @@
 interface FormattedMessage {
     userId: number;
     username: string;
+    avatar: string;
     message: string;
     createdAt: string;
     direction: "outgoing" | "incoming";
@@ -12,6 +13,7 @@ interface FormattedMessage {
 interface Message {
     userId: number,
     username: string,
+    avatar: string,
     message: string,
     createdAt: Date,
 }
@@ -24,6 +26,7 @@ export const formatData = (data: any[], currentUserId: number): FormattedMessage
         return {
             userId: message.user_id,
             username: message.username,
+            avatar: message.avatar,
             message: message.message,
             createdAt: message.created_at,
             direction,

@@ -80,7 +80,7 @@ app.get('/api/getUsername', async (req, res): Promise<any> => {
         }
 
         const query = `
-            SELECT username FROM users WHERE id = $1
+            SELECT username, avatar FROM users WHERE id = $1
         `;
 
         const result = await pool.query(query, [currentUserId]);
@@ -237,7 +237,7 @@ app.get('/api/getMessages', async (req, res): Promise<any> => {
         }
 
         const data = await pool.query(`
-            SELECT m.message, m.created_at, m.user_id, u.username
+            SELECT m.message, m.created_at, m.user_id, u.username, u.avatar
             FROM messages m
             JOIN users u ON m.user_id = u.id
             WHERE m.chat_id = $1
@@ -327,7 +327,7 @@ app.post('/api/login', async (req, res): Promise<any> => {
             const token = jwt.sign(
                 { userId: user.id, username: user.username, role: user.role },
                 jwtSecret,
-                { expiresIn: '1h' }
+                { expiresIn: '4h' }
               );
             res.status(200).json({ token });
         } else {
