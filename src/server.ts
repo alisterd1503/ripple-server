@@ -37,6 +37,7 @@ initialiseDatabase().then(() => {
     console.error("Error initialising database tables", err);
 });
 
+// Route to get current users profile for settings page
 app.get('/api/getProfile', async (req, res): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
 
@@ -65,7 +66,8 @@ app.get('/api/getProfile', async (req, res): Promise<any> => {
     }
 });
 
-app.get('/api/getUsername', async (req, res): Promise<any> => {
+// To retrieve the current users username and avatar
+app.get('/api/getUsernameAvatar', async (req, res): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
 
     if (!token) return res.status(401).json({ message: 'No token provided' });
