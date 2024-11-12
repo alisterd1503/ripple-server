@@ -177,9 +177,6 @@ app.post('/api/startGroupChat', async (req, res): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
     const { chosenUsers, title }: { chosenUsers: UserModel[]; title: string } = req.body;
 
-    console.log('allUsers:',chosenUsers)
-    console.log('title:',title)
-
     if (!token) return res.status(401).json({ message: 'No token provided' });
     if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
 
