@@ -25,6 +25,7 @@ const createChatsTable = async() => {
             CREATE TABLE IF NOT EXISTS chats (
                 id SERIAL PRIMARY KEY,
                 title VARCHAR(100),
+                description VARCHAR(100) DEFAULT 'Add a Description...',
                 is_group_chat BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );

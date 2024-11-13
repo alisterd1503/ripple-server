@@ -389,6 +389,7 @@ app.get('/api/getUserChat', async (req, res): Promise<any> => {
             SELECT 
                 c.id AS chat_id,
                 c.title,
+                c.description,
                 c.is_group_chat,
                 cu.added_at,
                 u.id AS user_id, 
@@ -434,6 +435,7 @@ app.get('/api/getUserChat', async (req, res): Promise<any> => {
                 acc.push({
                     chatId: row.chat_id,
                     title: row.title,
+                    description: row.description,
                     isGroupChat: row.is_group_chat,
                     lastMessage: row.lastmessage,
                     lastMessageTime: row.lastmessagetime,
@@ -460,7 +462,6 @@ app.get('/api/getUserChat', async (req, res): Promise<any> => {
         res.status(500).json({ message: 'Error fetching users chats' });
     }
 });
-
 
 // Route to remove a friend
 app.post('/api/removeFriend', async (req, res): Promise<any> => {
@@ -691,6 +692,55 @@ app.post('/api/deleteAccount', async (req, res): Promise<any> => {
     } catch (err) {
         console.error('Error deleting account:', err);
         res.status(500).json({ error: 'Error deleting account' });
+    }
+});
+
+
+/** GROUP CHAT **/
+
+// Route to update group title
+app.post('/api/updateTitle', async (req, res): Promise<any> => {
+    const token = req.headers['authorization']?.split(' ')[1];
+    const { chatId, title } = req.body;
+
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+
+    try {
+
+        await pool.query(
+            'UPDATE chats SET title = $1 WHERE id = $2',
+            [title, chatId]
+        );
+
+        // Send the new token or a success response
+        res.status(200).json({ message: 'title updated successfully' });
+    } catch (err) {
+        console.error('Error updating title:', err);
+        res.status(500).json({ error: 'Error updating title' });
+    }
+});
+
+// Route to update description
+app.post('/api/updateDescription', async (req, res): Promise<any> => {
+    const token = req.headers['authorization']?.split(' ')[1];
+    const { description, chatId } = req.body;
+
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+
+    try {
+        if (description.length < 1) return res.status(400).json({ message: 'Enter a description'})
+        if (description.length > 100)return res.status(400).json({ message: 'Description can only be 100 characters'})
+
+        await pool.query(
+            'UPDATE chats SET description = $1 WHERE id = $2',
+            [description, chatId]
+        );
+        res.status(200).json({ message: 'Description updated successfully' });
+    } catch (err) {
+        console.error('Error updating description:', err);
+        res.status(500).json({ error: 'Error updating description' });
     }
 });
 
