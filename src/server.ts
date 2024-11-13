@@ -483,6 +483,28 @@ app.post('/api/removeFriend', async (req, res): Promise<any> => {
     }
 });
 
+app.post('/api/leaveGroup', async (req, res): Promise<any> => {
+    const token = req.headers['authorization']?.split(' ')[1];
+    const body = {
+        chatId: req.body.chatId,
+    };
+
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+
+    try {
+        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+        const userId = decoded.userId;
+
+        await pool.query('DELETE FROM chat_users WHERE chat_id = $1 AND user_id = $2;', [body.chatId, userId]);
+
+        res.status(200).json({ message: 'Left group successfully' });
+    } catch (err) {
+        console.error('Error leaving group:', err);
+        res.status(500).json({ error: 'Error leaving group' });
+    }
+});
+
 /** SETTINGS **/
 
 // Route to update password
