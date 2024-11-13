@@ -26,6 +26,7 @@ const createChatsTable = async() => {
                 id SERIAL PRIMARY KEY,
                 title VARCHAR(100),
                 description VARCHAR(100) DEFAULT 'Add a Description...',
+                group_avatar VARCHAR(255),
                 is_group_chat BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );

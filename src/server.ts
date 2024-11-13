@@ -390,6 +390,7 @@ app.get('/api/getUserChat', async (req, res): Promise<any> => {
                 c.id AS chat_id,
                 c.title,
                 c.description,
+                c.group_avatar,
                 c.is_group_chat,
                 cu.added_at,
                 u.id AS user_id, 
@@ -436,6 +437,7 @@ app.get('/api/getUserChat', async (req, res): Promise<any> => {
                     chatId: row.chat_id,
                     title: row.title,
                     description: row.description,
+                    groupAvatar: row.group_avatar,
                     isGroupChat: row.is_group_chat,
                     lastMessage: row.lastmessage,
                     lastMessageTime: row.lastmessagetime,
@@ -741,6 +743,57 @@ app.post('/api/updateDescription', async (req, res): Promise<any> => {
     } catch (err) {
         console.error('Error updating description:', err);
         res.status(500).json({ error: 'Error updating description' });
+    }
+});
+
+// Route to delete group photo
+app.post('/api/deleteGroupPhoto', async (req, res): Promise<any> => {
+    const token = req.headers['authorization']?.split(' ')[1];
+    const { chatId } = req.body;
+
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+
+    try {
+
+        await pool.query(
+            'UPDATE chats SET group_avatar = $1 WHERE id = $2',
+            [null, chatId]
+        );
+        res.status(200).json({ message: 'Group photo deleted successfully' });
+    } catch (err) {
+        console.error('Error deleting photo:', err);
+        res.status(500).json({ error: 'Error deleting photo' });
+    }
+});
+
+// Route to upload group photo
+app.post('/api/uploadGroupPhoto', upload.single('avatar'), async (req, res): Promise<any> => {
+    const token = req.headers['authorization']?.split(' ')[1];
+    const { chatId } = req.body;
+
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+
+    try {
+        const file = req.file;
+
+        if (!file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+
+        const avatarPath = `/uploads/${file.filename}`;
+
+        await pool.query(
+            'UPDATE chats SET group_avatar = $1 WHERE id = $2',
+            [avatarPath, chatId]
+        );
+
+        // Respond with the path to the saved avatar
+        res.json({ message: 'Photo uploaded successfully', avatarPath });
+    } catch (error) {
+        console.error('Error uploading photo:', error);
+        res.status(500).json({ error: 'Error uploading photo' });
     }
 });
 
