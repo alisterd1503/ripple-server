@@ -393,28 +393,33 @@ app.get('/api/getUserChat', async (req, res): Promise<any> => {
                 c.group_avatar,
                 c.is_group_chat,
                 cu.added_at,
-                u.id AS user_id, 
+                u.id AS user_id,
                 u.username,
                 u.avatar,
                 u.bio,
                 m.message AS lastMessage,
-                m.created_at AS lastMessageTime
+                m.created_at AS lastMessageTime,
+                m_sender.username AS lastMessageSender
             FROM chat_users cu
             JOIN chats c ON cu.chat_id = c.id
             JOIN users u ON cu.user_id = u.id
             LEFT JOIN LATERAL (
-                SELECT message, created_at 
+                SELECT 
+                    message, 
+                    created_at, 
+                    user_id 
                 FROM messages 
                 WHERE chat_id = cu.chat_id 
                 ORDER BY created_at DESC 
                 LIMIT 1
             ) m ON true
+            LEFT JOIN users m_sender ON m.user_id = m_sender.id
             WHERE cu.chat_id IN (
                 SELECT chat_id
                 FROM chat_users
                 WHERE user_id = $1
             ) AND (c.is_group_chat = true OR cu.user_id != $1)
-            ORDER BY m.created_at DESC
+            ORDER BY m.created_at DESC;
         `, [userId]);
 
         // Group chats by chat ID and format the result
@@ -441,6 +446,7 @@ app.get('/api/getUserChat', async (req, res): Promise<any> => {
                     isGroupChat: row.is_group_chat,
                     lastMessage: row.lastmessage,
                     lastMessageTime: row.lastmessagetime,
+                    lastMessageSender: row.lastmessagesender,
                     added_at: row.added_at,
                     participants: [{
                         userId: row.user_id,
