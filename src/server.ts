@@ -110,7 +110,7 @@ app.get('/api/getUsers', async (req, res): Promise<any> => {
             return res.status(401).json({ error: 'Invalid token' });
         }
 
-        const result = await pool.query(`SELECT id AS "userId", username FROM users;`);
+        const result = await pool.query(`SELECT id AS "userId", username FROM users WHERE id != $1;`, [currentUserId]);
         const data = result.rows;
 
         res.status(200).json(data);
@@ -149,6 +149,21 @@ app.post('/api/startChat', async (req, res): Promise<any> => {
             return res.status(401).json({ message: 'Token is missing user ID' });
         }
 
+        // Check if a chat already exists between the two users
+        const existingChatResult = await pool.query(`
+            SELECT c.id 
+            FROM chats c
+            JOIN chat_users cu1 ON c.id = cu1.chat_id AND cu1.user_id = $1
+            JOIN chat_users cu2 ON c.id = cu2.chat_id AND cu2.user_id = $2
+            WHERE c.is_group_chat = false
+        `, [currentUserId, userId]);
+
+        if (existingChatResult.rows.length > 0) {
+            // Chat already exists, return the existing chat
+            return res.status(200).json({ chatId: existingChatResult.rows[0].id });
+        }
+
+        // Chat does not exist, create a new one
         const chatResult = await pool.query(`
             INSERT INTO chats (title, is_group_chat)
             VALUES ($1, false)
@@ -157,17 +172,19 @@ app.post('/api/startChat', async (req, res): Promise<any> => {
 
         const chatId = chatResult.rows[0].id;
 
-        const insertResult = await pool.query(`
+        // Add both users to the new chat
+        await pool.query(`
             INSERT INTO chat_users (chat_id, user_id)
             VALUES ($1, $2), ($1, $3)
         `, [chatId, currentUserId, userId]);
 
-        res.status(201).json(insertResult.rows[0]);
+        res.status(201).json({ chatId });
     } catch (err) {
         console.error('Error starting chat:', err);
         res.status(500).json({ error: 'Error starting chat' });
     }
 });
+
 
 interface UserModel {
     userId: number;
@@ -185,10 +202,30 @@ app.post('/api/startGroupChat', async (req, res): Promise<any> => {
     try {
         const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
         const currentUserId = decoded.userId;
-        
+
         if (!currentUserId) return res.status(401).json({ message: 'Token is missing user ID' });
 
-        // Insert the new group chat into chats table
+        // Collect all user IDs (including current user) for the group
+        const userIds = chosenUsers.map(user => user.userId);
+        userIds.push(currentUserId);
+        userIds.sort();  // Sort to ensure the order matches for comparison
+
+        // Check if a group chat with the exact same set of users already exists
+        const existingChatResult = await pool.query(`
+            SELECT c.id
+            FROM chats c
+            JOIN chat_users cu ON c.id = cu.chat_id
+            WHERE c.is_group_chat = true
+            GROUP BY c.id
+            HAVING array_agg(cu.user_id ORDER BY cu.user_id) = $1
+        `, [userIds]);
+
+        if (existingChatResult.rows.length > 0) {
+            // Group chat already exists, return the existing chat
+            return res.status(200).json({ message: 'Group chat already exists', chatId: existingChatResult.rows[0].id });
+        }
+
+        // No matching group chat found, create a new one
         const chatResult = await pool.query(`
             INSERT INTO chats (title, is_group_chat)
             VALUES ($1, true)
@@ -197,21 +234,15 @@ app.post('/api/startGroupChat', async (req, res): Promise<any> => {
 
         const chatId = chatResult.rows[0].id;
 
-        // Add all specified users, including the current user, to the chat_users table
-        const userIds = chosenUsers.map(user => user.userId);
-        userIds.push(currentUserId);
-
-        // Create a values string for batch insert
+        // Prepare values string for batch insertion into chat_users
         const valuesString = userIds.map((_, index) => `($1, $${index + 2})`).join(", ");
         const values = [chatId, ...userIds];
 
-        // Insert all users into chat_users
         await pool.query(`
             INSERT INTO chat_users (chat_id, user_id)
             VALUES ${valuesString}
         `, values);
 
-        // Respond with success
         res.status(201).json({ message: 'Group chat created successfully', chatId });
     } catch (err) {
         console.error('Error starting chat:', err);
