@@ -7,7 +7,7 @@ import validatePassword from './validatePassword';
 import { formatData } from './formatMessages';
 
 const app = express();
-const PORT = process.env.PORT || 5002;
+const PORT = parseInt(process.env.PORT as string, 10) || 5002;
 const jwtSecret = process.env.JWT_SECRET;
 const upload = multer({ dest: 'uploads/' })
 app.use('/uploads', express.static('uploads'));
@@ -814,10 +814,6 @@ app.post('/api/uploadGroupPhoto', upload.single('avatar'), async (req, res): Pro
 });
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on http://localhost:${PORT}`);
 });
-function formatMessages(data: any) {
-    throw new Error('Function not implemented.');
-}
-
