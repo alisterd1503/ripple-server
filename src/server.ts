@@ -4,7 +4,7 @@ import jwt, { JwtPayload } from 'jsonwebtoken';
 import 'dotenv/config'
 import multer from 'multer';
 import validatePassword from './validatePassword';
-import { formatData } from './formatMessages';
+import { formatMessages } from './formatMessages';
 
 const app = express();
 const PORT = parseInt(process.env.PORT as string, 10) || 5002;
@@ -37,64 +37,6 @@ initialiseDatabase().then(() => {
     console.error("Error initialising database tables", err);
 });
 
-// Route to get current users profile for settings page
-app.get('/api/getProfile', async (req, res): Promise<any> => {
-    const token = req.headers['authorization']?.split(' ')[1];
-
-    if (!token) return res.status(401).json({ message: 'No token provided' });
-    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
-    
-    try {
-        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
-        const currentUserId = decoded.userId;
-
-        if (!currentUserId) {
-            return res.status(401).json({ error: 'Invalid token' });
-        }
-
-        const query = `
-            SELECT username, bio, avatar, created_at FROM users WHERE id = $1
-        `;
-
-        const result = await pool.query(query, [currentUserId]);
-        const data = result.rows[0];
-
-        res.status(200).json(data);
-    } catch (err) {
-        console.error('Error fetching users:', err);
-        res.status(500).json({ error: 'Error fetching users' });
-    }
-});
-
-// To retrieve the current users username and avatar
-app.get('/api/getUsernameAvatar', async (req, res): Promise<any> => {
-    const token = req.headers['authorization']?.split(' ')[1];
-
-    if (!token) return res.status(401).json({ message: 'No token provided' });
-    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
-    
-    try {
-        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
-        const currentUserId = decoded.userId;
-
-        if (!currentUserId) {
-            return res.status(401).json({ error: 'Invalid token' });
-        }
-
-        const query = `
-            SELECT username, avatar FROM users WHERE id = $1
-        `;
-
-        const result = await pool.query(query, [currentUserId]);
-        const data = result.rows[0];
-
-        res.status(200).json(data);
-    } catch (err) {
-        console.error('Error fetching username:', err);
-        res.status(500).json({ error: 'Error fetching username' });
-    }
-});
-
 // Retrieves all the users and their ids
 app.get('/api/getUsers', async (req, res): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
@@ -120,18 +62,7 @@ app.get('/api/getUsers', async (req, res): Promise<any> => {
     }
 });
 
-// Retrieves all the users to check for duplicate names during registeration
-app.get('/api/getAllUsers', async (req, res) => {
-    try {
-        const result = await pool.query(`SELECT username, id FROM users`);
-        const data = result.rows;
-
-        res.status(200).json(data);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Error fetching users' });
-    }
-});
+/** Find & Add User **/
 
 // Route to start a direct message
 app.post('/api/startChat', async (req, res): Promise<any> => {
@@ -185,80 +116,7 @@ app.post('/api/startChat', async (req, res): Promise<any> => {
     }
 });
 
-interface UserModel {
-    userId: number;
-    username: string;
-}
-
-// Route to start group chat
-app.post('/api/startGroupChat', upload.single('avatar'), async (req, res): Promise<any> => {
-    const token = req.headers['authorization']?.split(' ')[1];
-
-    if (!token) return res.status(401).json({ message: 'No token provided' });
-    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
-
-    try {
-        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
-        const currentUserId = decoded.userId;
-
-        if (!currentUserId) return res.status(401).json({ message: 'Token is missing user ID' });
-
-        const title = req.body.title ? req.body.title : 'names';
-        const description = req.body.description ? req.body.description : 'something';
-
-        const users = req.body.users.map((userStr: string) => {
-            try {
-                return JSON.parse(userStr);
-            } catch (error) {
-                console.error('Error parsing user:', error);
-                return null;
-            }
-        }).filter((user: null) => user !== null);
-
-        const userIds = users.map((user: UserModel) => user.userId);
-        userIds.push(currentUserId);
-        userIds.sort();
-
-        if (userIds.length <= 1) return res.status(400).json({ message: 'Add more members' });
-
-        // Check if a group chat with the exact same set of users already exists
-        const existingChatResult = await pool.query(`
-            SELECT c.id
-            FROM chats c
-            JOIN chat_users cu ON c.id = cu.chat_id
-            WHERE c.is_group_chat = true
-            GROUP BY c.id
-            HAVING array_agg(cu.user_id ORDER BY cu.user_id) = $1
-        `, [userIds]);
-
-        if (existingChatResult.rows.length > 0) return res.status(400).json({ message: 'Group chat already exists' });
-
-        const avatarPath = req.file ? `/${req.file.path}` : null
-
-        // No matching group chat found, create a new one
-        const chatResult = await pool.query(`
-            INSERT INTO chats (title, description, group_avatar, is_group_chat)
-            VALUES ($1, $2, $3, true)
-            RETURNING id
-        `, [title, description, avatarPath]);
-
-        const chatId = chatResult.rows[0].id;
-
-        // Prepare values string for batch insertion into chat_users
-        const valuesString = userIds.map((_: any, index: number) => `($1, $${index + 2})`).join(", ");
-        const values = [chatId, ...userIds];
-
-        await pool.query(`
-            INSERT INTO chat_users (chat_id, user_id)
-            VALUES ${valuesString}
-        `, values);
-
-        res.status(201).json({ message: 'Group chat created successfully' });
-    } catch (err) {
-        console.error('Error starting chat:', err);
-        res.status(500).json({ error: 'Error starting chat' });
-    }
-});
+/** Message **/
 
 app.get('/api/getMessages', async (req, res): Promise<any> => {
     const { chatId } = req.query;
@@ -284,7 +142,7 @@ app.get('/api/getMessages', async (req, res): Promise<any> => {
             ORDER BY m.created_at ASC
         `, [chatId]);
 
-        const messages = formatData(data.rows, currentUserId)
+        const messages = formatMessages(data.rows, currentUserId)
 
         res.status(200).json(messages);
     } catch (err) {
@@ -319,65 +177,36 @@ app.post('/api/postMessage', async (req, res): Promise<any> => {
     }
 });
 
-app.post('/api/register', async (req, res): Promise<any> => {
-    const body = {
-        username: req.body.username,
-        password: req.body.password,
-    };
+// To retrieve the current users username and avatar
+app.get('/api/getUsernameAvatar', async (req, res): Promise<any> => {
+    const token = req.headers['authorization']?.split(' ')[1];
 
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+    
     try {
-        // Validating Usernames
-        const existingUser = await pool.query('SELECT * FROM users WHERE username = $1', [body.username]);
-        if (existingUser.rows.length > 0) return res.status(400).json({ message: 'Username already exists' });
-        if ((body.username).trim().length < 1) return res.status(400).json({message: 'Username must be at least one character long.'});
-        if (/\s/.test(body.username)) return res.status(400).json({ message: 'Username cannot contain spaces.'})
+        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+        const currentUserId = decoded.userId;
 
-         // Validating Password
-         const passwordValidation = validatePassword(body.password);
-         if (!passwordValidation.valid) {
-             return res.status(400).json({ message: passwordValidation.message });
-         }
-        
-        const insertResult = await pool.query(
-            'INSERT INTO users (username, password) VALUES ($1, $2) RETURNING *',
-            [body.username, body.password]
-        );
-        res.status(201).json(insertResult.rows[0]);
-    } catch (err) {
-        console.error('Error registering user:', err);
-        res.status(500).json({ error: 'Error registering user' });
-    }
-});
-
-app.post('/api/login', async (req, res): Promise<any> => {
-
-    const body = {
-        username: req.body.username,
-        password: req.body.password,
-    };
-
-    try {
-        const result = await pool.query('SELECT * FROM users WHERE username = $1', [body.username]);
-        const user = result.rows[0];
-        
-        if (!user) return res.status(401).json({ message: 'Username not found' });
-        if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' })
-
-        if (body.password === user.password) {
-            const token = jwt.sign(
-                { userId: user.id, username: user.username, role: user.role },
-                jwtSecret,
-                { expiresIn: '4h' }
-              );
-            res.status(200).json({ token });
-        } else {
-            res.status(401).json({ message: 'Invalid password.' });
+        if (!currentUserId) {
+            return res.status(401).json({ error: 'Invalid token' });
         }
+
+        const query = `
+            SELECT username, avatar FROM users WHERE id = $1
+        `;
+
+        const result = await pool.query(query, [currentUserId]);
+        const data = result.rows[0];
+
+        res.status(200).json(data);
     } catch (err) {
-        console.error('Error logging in:', err);
-        res.status(500).json({ error: 'Error logging in' });
+        console.error('Error fetching username:', err);
+        res.status(500).json({ error: 'Error fetching username' });
     }
 });
+
+/** Contacts **/
 
 // Retrieves all the chats the current user is part of, including group chats
 app.get('/api/getUserChat', async (req, res): Promise<any> => {
@@ -481,6 +310,72 @@ app.get('/api/getUserChat', async (req, res): Promise<any> => {
     }
 });
 
+/** AUTHENTICATION **/
+
+// Route to register new user
+app.post('/api/register', async (req, res): Promise<any> => {
+    const body = {
+        username: req.body.username,
+        password: req.body.password,
+    };
+
+    try {
+        // Validating Usernames
+        const existingUser = await pool.query('SELECT * FROM users WHERE username = $1', [body.username]);
+        if (existingUser.rows.length > 0) return res.status(400).json({ message: 'Username already exists' });
+        if ((body.username).trim().length < 1) return res.status(400).json({message: 'Username must be at least one character long.'});
+        if (/\s/.test(body.username)) return res.status(400).json({ message: 'Username cannot contain spaces.'})
+
+         // Validating Password
+         const passwordValidation = validatePassword(body.password);
+         if (!passwordValidation.valid) {
+             return res.status(400).json({ message: passwordValidation.message });
+         }
+        
+        const insertResult = await pool.query(
+            'INSERT INTO users (username, password) VALUES ($1, $2) RETURNING *',
+            [body.username, body.password]
+        );
+        res.status(201).json(insertResult.rows[0]);
+    } catch (err) {
+        console.error('Error registering user:', err);
+        res.status(500).json({ error: 'Error registering user' });
+    }
+});
+
+// Route to login user
+app.post('/api/login', async (req, res): Promise<any> => {
+
+    const body = {
+        username: req.body.username,
+        password: req.body.password,
+    };
+
+    try {
+        const result = await pool.query('SELECT * FROM users WHERE username = $1', [body.username]);
+        const user = result.rows[0];
+        
+        if (!user) return res.status(401).json({ message: 'Username not found' });
+        if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' })
+
+        if (body.password === user.password) {
+            const token = jwt.sign(
+                { userId: user.id, username: user.username, role: user.role },
+                jwtSecret,
+                { expiresIn: '4h' }
+              );
+            res.status(200).json({ token });
+        } else {
+            res.status(401).json({ message: 'Invalid password.' });
+        }
+    } catch (err) {
+        console.error('Error logging in:', err);
+        res.status(500).json({ error: 'Error logging in' });
+    }
+});
+
+/** Profile **/
+
 // Route to remove a friend
 app.post('/api/removeFriend', async (req, res): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
@@ -502,29 +397,36 @@ app.post('/api/removeFriend', async (req, res): Promise<any> => {
     }
 });
 
-app.post('/api/leaveGroup', async (req, res): Promise<any> => {
+/** SETTINGS **/
+
+// Route to get current users profile for settings page
+app.get('/api/getProfile', async (req, res): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
-    const body = {
-        chatId: req.body.chatId,
-    };
 
     if (!token) return res.status(401).json({ message: 'No token provided' });
     if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
-
+    
     try {
         const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
-        const userId = decoded.userId;
+        const currentUserId = decoded.userId;
 
-        await pool.query('DELETE FROM chat_users WHERE chat_id = $1 AND user_id = $2;', [body.chatId, userId]);
+        if (!currentUserId) {
+            return res.status(401).json({ error: 'Invalid token' });
+        }
 
-        res.status(200).json({ message: 'Left group successfully' });
+        const query = `
+            SELECT username, bio, avatar, created_at FROM users WHERE id = $1
+        `;
+
+        const result = await pool.query(query, [currentUserId]);
+        const data = result.rows[0];
+
+        res.status(200).json(data);
     } catch (err) {
-        console.error('Error leaving group:', err);
-        res.status(500).json({ error: 'Error leaving group' });
+        console.error('Error fetching users:', err);
+        res.status(500).json({ error: 'Error fetching users' });
     }
 });
-
-/** SETTINGS **/
 
 // Route to update password
 app.post('/api/changePassword', async (req, res): Promise<any> => {
@@ -716,6 +618,76 @@ app.post('/api/deleteAccount', async (req, res): Promise<any> => {
 
 /** GROUP CHAT **/
 
+// Route to start group chat
+app.post('/api/startGroupChat', upload.single('avatar'), async (req, res): Promise<any> => {
+    const token = req.headers['authorization']?.split(' ')[1];
+
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+
+    try {
+        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+        const currentUserId = decoded.userId;
+
+        if (!currentUserId) return res.status(401).json({ message: 'Token is missing user ID' });
+
+        const title = req.body.title ? req.body.title : 'names';
+        const description = req.body.description ? req.body.description : 'something';
+
+        const users = req.body.users.map((userStr: string) => {
+            try {
+                return JSON.parse(userStr);
+            } catch (error) {
+                console.error('Error parsing user:', error);
+                return null;
+            }
+        }).filter((user: null) => user !== null);
+
+        const userIds = users.map((user: {userId: number, username: string}) => user.userId);
+        userIds.push(currentUserId);
+        userIds.sort();
+
+        if (userIds.length <= 1) return res.status(400).json({ message: 'Add more members' });
+
+        // Check if a group chat with the exact same set of users already exists
+        const existingChatResult = await pool.query(`
+            SELECT c.id
+            FROM chats c
+            JOIN chat_users cu ON c.id = cu.chat_id
+            WHERE c.is_group_chat = true
+            GROUP BY c.id
+            HAVING array_agg(cu.user_id ORDER BY cu.user_id) = $1
+        `, [userIds]);
+
+        if (existingChatResult.rows.length > 0) return res.status(400).json({ message: 'Group chat already exists' });
+
+        const avatarPath = req.file ? `/${req.file.path}` : null
+
+        // No matching group chat found, create a new one
+        const chatResult = await pool.query(`
+            INSERT INTO chats (title, description, group_avatar, is_group_chat)
+            VALUES ($1, $2, $3, true)
+            RETURNING id
+        `, [title, description, avatarPath]);
+
+        const chatId = chatResult.rows[0].id;
+
+        // Prepare values string for batch insertion into chat_users
+        const valuesString = userIds.map((_: any, index: number) => `($1, $${index + 2})`).join(", ");
+        const values = [chatId, ...userIds];
+
+        await pool.query(`
+            INSERT INTO chat_users (chat_id, user_id)
+            VALUES ${valuesString}
+        `, values);
+
+        res.status(201).json({ message: 'Group chat created successfully' });
+    } catch (err) {
+        console.error('Error starting chat:', err);
+        res.status(500).json({ error: 'Error starting chat' });
+    }
+});
+
 // Route to update group title
 app.post('/api/updateTitle', async (req, res): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
@@ -812,6 +784,31 @@ app.post('/api/uploadGroupPhoto', upload.single('avatar'), async (req, res): Pro
         res.status(500).json({ error: 'Error uploading photo' });
     }
 });
+
+// Route to remove user from group
+app.post('/api/leaveGroup', async (req, res): Promise<any> => {
+    const token = req.headers['authorization']?.split(' ')[1];
+    const body = {
+        chatId: req.body.chatId,
+    };
+
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+
+    try {
+        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+        const userId = decoded.userId;
+
+        await pool.query('DELETE FROM chat_users WHERE chat_id = $1 AND user_id = $2;', [body.chatId, userId]);
+
+        res.status(200).json({ message: 'Left group successfully' });
+    } catch (err) {
+        console.error('Error leaving group:', err);
+        res.status(500).json({ error: 'Error leaving group' });
+    }
+});
+
+/** SERVER **/
 
 // Start server
 app.listen(PORT, '0.0.0.0', () => {

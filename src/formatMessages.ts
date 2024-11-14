@@ -1,23 +1,6 @@
-//import { FormattedMessage, Message } from "./messageModel";
+import { MessageModel } from "./messageModel";
 
-interface FormattedMessage {
-    userId: number;
-    username: string;
-    avatar: string;
-    message: string;
-    createdAt: string;
-    direction: "outgoing" | "incoming";
-    position: "first" | "last" | "single";
-}
-
-interface Message {
-    userId: number,
-    username: string,
-    avatar: string,
-    message: string,
-    createdAt: Date,
-}
-export const formatData = (data: any[], currentUserId: number): FormattedMessage[] => {
+export const formatMessages = (data: any[], currentUserId: number): MessageModel[] => {
     return data.map((message) => {
 
         const direction = message.user_id === currentUserId ? "outgoing" : "incoming";
