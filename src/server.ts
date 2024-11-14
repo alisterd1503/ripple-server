@@ -185,23 +185,14 @@ app.post('/api/startChat', async (req, res): Promise<any> => {
     }
 });
 
-
 interface UserModel {
     userId: number;
     username: string;
 }
 
-interface StartGroupChatModel {
-    users: UserModel[],
-    title: string | null,
-    description: string | null,
-    avatar: File | null,
-}
-
 // Route to start group chat
-app.post('/api/startGroupChat', async (req, res): Promise<any> => {
+app.post('/api/startGroupChat', upload.single('avatar'), async (req, res): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
-    const { body }: { body: StartGroupChatModel } = req.body;
 
     if (!token) return res.status(401).json({ message: 'No token provided' });
     if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
@@ -212,10 +203,23 @@ app.post('/api/startGroupChat', async (req, res): Promise<any> => {
 
         if (!currentUserId) return res.status(401).json({ message: 'Token is missing user ID' });
 
-        // Collect all user IDs (including current user) for the group
-        const userIds = (body.users).map(user => user.userId);
+        const title = req.body.title ? req.body.title : 'names';
+        const description = req.body.description ? req.body.description : 'something';
+
+        const users = req.body.users.map((userStr: string) => {
+            try {
+                return JSON.parse(userStr);
+            } catch (error) {
+                console.error('Error parsing user:', error);
+                return null;
+            }
+        }).filter((user: null) => user !== null);
+
+        const userIds = users.map((user: UserModel) => user.userId);
         userIds.push(currentUserId);
         userIds.sort();
+
+        if (userIds.length <= 1) return res.status(400).json({ message: 'Add more members' });
 
         // Check if a group chat with the exact same set of users already exists
         const existingChatResult = await pool.query(`
@@ -229,17 +233,19 @@ app.post('/api/startGroupChat', async (req, res): Promise<any> => {
 
         if (existingChatResult.rows.length > 0) return res.status(400).json({ message: 'Group chat already exists' });
 
+        const avatarPath = req.file ? `/${req.file.path}` : null
+
         // No matching group chat found, create a new one
         const chatResult = await pool.query(`
             INSERT INTO chats (title, description, group_avatar, is_group_chat)
             VALUES ($1, $2, $3, true)
             RETURNING id
-        `, [body.title,body.description,body.avatar]);
+        `, [title, description, avatarPath]);
 
         const chatId = chatResult.rows[0].id;
 
         // Prepare values string for batch insertion into chat_users
-        const valuesString = userIds.map((_, index) => `($1, $${index + 2})`).join(", ");
+        const valuesString = userIds.map((_: any, index: number) => `($1, $${index + 2})`).join(", ");
         const values = [chatId, ...userIds];
 
         await pool.query(`
