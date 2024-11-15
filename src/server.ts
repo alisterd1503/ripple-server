@@ -376,6 +376,160 @@ app.post('/api/login', async (req, res): Promise<any> => {
 
 /** Profile **/
 
+interface UserProfile {
+    userId: number;
+    username: string;
+    avatar: string;
+    bio: string;
+    added_at: string | null;
+    groups_in: number[];
+}
+
+interface GroupProfile {
+    title: string;
+    description: string;
+    groupAvatar: string;
+    created_at: string;
+    added_at: string;
+    members: {
+      userId: number;
+      username: string;
+      avatar: string;
+      bio: string;
+    }[];
+}
+
+app.get('/api/getUserProfile', async (req, res): Promise<any> => {
+    const { chatId } = req.query;
+    const token = req.headers['authorization']?.split(' ')[1];
+
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+
+    try {
+        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+        const currentUserId = decoded.userId;
+
+        if (!currentUserId) {
+            return res.status(401).json({ message: 'Token is missing user ID' });
+        }
+
+        // Retrieve user information from the chat
+        const userProfileQuery = `
+            SELECT 
+                u.id AS user_id, 
+                u.username, 
+                u.avatar, 
+                u.bio, 
+                cu.added_at
+            FROM users u
+            JOIN chat_users cu ON u.id = cu.user_id
+            WHERE cu.chat_id = $1 AND u.id != $2
+            LIMIT 1
+        `;
+        const userProfileResult = await pool.query(userProfileQuery, [chatId, currentUserId]);
+        const userProfile = userProfileResult.rows[0];
+
+        if (!userProfile) {
+            return res.status(404).json({ message: 'No other users found in this chat' });
+        }
+
+        // Retrieve group chat IDs both users are in (if this is a group chat)
+        const groupsInQuery = `
+            SELECT c.id AS group_id
+            FROM chats c
+            JOIN chat_users cu1 ON c.id = cu1.chat_id AND cu1.user_id = $1
+            JOIN chat_users cu2 ON c.id = cu2.chat_id AND cu2.user_id = $2
+            WHERE c.is_group_chat = true
+        `;
+        const groupsInResult = await pool.query(groupsInQuery, [userProfile.user_id, currentUserId]);
+        const groupsIn = groupsInResult.rows.map((row: { group_id: number }) => row.group_id);
+
+        // Construct the response
+        const response: UserProfile = {
+            userId: userProfile.user_id,
+            username: userProfile.username,
+            avatar: userProfile.avatar,
+            bio: userProfile.bio,
+            added_at: userProfile.added_at,
+            groups_in: groupsIn,
+        };
+
+        res.status(200).json(response);
+    } catch (err) {
+        console.error('Error fetching user profile:', err)
+        res.status(500).json({ message: 'Error fetching user profile' });
+    }
+});
+
+app.get('/api/getGroupProfile', async (req, res): Promise<any> => {
+    const { chatId } = req.query;
+    const token = req.headers['authorization']?.split(' ')[1];
+
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+
+    try {
+        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+        const currentUserId = decoded.userId;
+
+        if (!currentUserId) {
+            return res.status(401).json({ message: 'Token is missing user ID' });
+        }
+
+        const chatQuery = `
+            SELECT 
+                c.title, 
+                c.description, 
+                c.group_avatar, 
+                c.created_at
+            FROM chats c
+            WHERE c.id = $1 AND c.is_group_chat = true
+        `;
+
+        const chatResult = await pool.query(chatQuery, [chatId]);
+        const chatDetails = chatResult.rows[0];
+
+        // Retrieve all members of the group chat
+        const membersQuery = `
+            SELECT 
+                u.id AS user_id,
+                u.username,
+                u.avatar,
+                u.bio,
+                cu.added_at
+            FROM users u
+            JOIN chat_users cu ON u.id = cu.user_id
+            WHERE cu.chat_id = $1
+            ORDER BY cu.added_at ASC
+        `;
+        const membersResult = await pool.query(membersQuery, [chatId]);
+        const members = membersResult.rows.map((row: { user_id: number; username: string; avatar: string; bio: string; added_at: string; }) => ({
+            userId: row.user_id,
+            username: row.username,
+            avatar: row.avatar,
+            bio: row.bio,
+            added_at: row.added_at,
+        }));
+
+        // Construct the response
+        const response: GroupProfile = {
+            title: chatDetails.title,
+            description: chatDetails.description,
+            groupAvatar: chatDetails.group_avatar,
+            created_at: chatDetails.created_at,
+            added_at: members.find((member: { userId: number; }) => member.userId === currentUserId)?.added_at || null,
+            members,
+        };
+
+        res.status(200).json(response);
+    } catch (err) {
+        console.error('Error fetching group profile:', err);
+        res.status(500).json({ message: 'Error fetching group profile' });
+    }
+});
+
+
 // Route to remove a friend
 app.post('/api/removeFriend', async (req, res): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
@@ -631,9 +785,6 @@ app.post('/api/startGroupChat', upload.single('avatar'), async (req, res): Promi
 
         if (!currentUserId) return res.status(401).json({ message: 'Token is missing user ID' });
 
-        const title = req.body.title ? req.body.title : 'names';
-        const description = req.body.description ? req.body.description : 'something';
-
         const users = req.body.users.map((userStr: string) => {
             try {
                 return JSON.parse(userStr);
@@ -646,6 +797,11 @@ app.post('/api/startGroupChat', upload.single('avatar'), async (req, res): Promi
         const userIds = users.map((user: {userId: number, username: string}) => user.userId);
         userIds.push(currentUserId);
         userIds.sort();
+
+        const usernames = users.map((user: { userId: number, username: string }) => user.username).join(', ');
+
+        const title = req.body.title ? req.body.title : usernames;
+        const description = req.body.description ? req.body.description : 'Add a Description...';
 
         if (userIds.length <= 1) return res.status(400).json({ message: 'Add more members' });
 
