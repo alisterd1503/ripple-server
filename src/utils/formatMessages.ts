@@ -1,4 +1,4 @@
-import { MessageModel } from "./messageModel";
+import { MessageModel } from "../models/MessageModel";
 
 export const formatMessages = (data: any[], currentUserId: number): MessageModel[] => {
     return data.map((message) => {

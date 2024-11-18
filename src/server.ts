@@ -3,8 +3,10 @@ import cors from 'cors'
 import jwt, { JwtPayload } from 'jsonwebtoken';
 import 'dotenv/config'
 import multer from 'multer';
-import validatePassword from './validatePassword';
-import { formatMessages } from './formatMessages';
+import validatePassword from './utils/validatePassword';
+import { formatMessages } from './utils/formatMessages';
+import { UserProfile } from './models/UserProfileModel';
+import { GroupProfile } from './models/GroupProfileModel';
 
 const app = express();
 const PORT = parseInt(process.env.PORT as string, 10) || 5002;
@@ -375,29 +377,6 @@ app.post('/api/login', async (req, res): Promise<any> => {
 });
 
 /** Profile **/
-
-interface UserProfile {
-    userId: number;
-    username: string;
-    avatar: string;
-    bio: string;
-    added_at: string | null;
-    groups_in: number[];
-}
-
-interface GroupProfile {
-    title: string;
-    description: string;
-    groupAvatar: string;
-    created_at: string;
-    added_at: string;
-    members: {
-      userId: number;
-      username: string;
-      avatar: string;
-      bio: string;
-    }[];
-}
 
 app.get('/api/getUserProfile', async (req, res): Promise<any> => {
     const { chatId } = req.query;
