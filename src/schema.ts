@@ -61,6 +61,7 @@ const createMessagesTable = async() => {
                 chat_id INT REFERENCES chats(id) ON DELETE CASCADE,
                 user_id INT REFERENCES users(id) ON DELETE CASCADE,
                 message TEXT NOT NULL,
+                is_image BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);

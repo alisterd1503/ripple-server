@@ -11,6 +11,7 @@ export const formatMessages = (data: any[], currentUserId: number): MessageModel
             username: message.username,
             avatar: message.avatar,
             message: message.message,
+            isImage: message.is_image,
             createdAt: message.created_at,
             direction,
             position,

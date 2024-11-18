@@ -137,7 +137,7 @@ app.get('/api/getMessages', async (req, res): Promise<any> => {
         }
 
         const data = await pool.query(`
-            SELECT m.message, m.created_at, m.user_id, u.username, u.avatar
+            SELECT m.message, m.created_at, m.user_id, m.is_image, u.username, u.avatar
             FROM messages m
             JOIN users u ON m.user_id = u.id
             WHERE m.chat_id = $1
@@ -153,9 +153,11 @@ app.get('/api/getMessages', async (req, res): Promise<any> => {
     }
 });
 
-app.post('/api/postMessage', async (req, res): Promise<any> => {
+app.post('/api/postMessage', upload.single('image'), async (req, res): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
     const { chatId, message } = req.body;
+
+    console.log('mesage log: ',message)
 
     if (!token) return res.status(401).json({ message: 'No token provided' });
     if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
@@ -168,11 +170,20 @@ app.post('/api/postMessage', async (req, res): Promise<any> => {
             return res.status(401).json({ message: 'Token is missing user ID' });
         }
 
+        const isImage = !!req.file;
+        const content = isImage && req.file ? `/uploads/${req.file.filename}` : message;
+
+
         const insertResult = await pool.query(
-            'INSERT INTO messages (chat_id, user_id, message) VALUES ($1, $2, $3) RETURNING *',
-            [chatId, currentUserId, message]
+            `INSERT INTO messages (chat_id, user_id, message, is_image) 
+             VALUES ($1, $2, $3, $4) RETURNING *`,
+            [chatId, currentUserId, content, isImage]
         );
-        res.status(201).json(insertResult.rows[0]);
+
+        res.status(201).json({
+            ...insertResult.rows[0],
+            imageUrl: isImage ? content : null,
+        });
     } catch (err) {
         console.error('Error posting message:', err);
         res.status(500).json({ error: 'Error posting message' });
