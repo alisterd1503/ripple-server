@@ -250,13 +250,15 @@ app.get('/api/getContactList', async (req, res): Promise<any> => {
                 u.bio,
                 m.message AS lastMessage,
                 m.created_at AS lastMessageTime,
-                m_sender.username AS lastMessageSender
+                m_sender.username AS lastMessageSender,
+                m.is_image AS isImage
             FROM chat_users cu
             JOIN chats c ON cu.chat_id = c.id
             JOIN users u ON cu.user_id = u.id
             LEFT JOIN LATERAL (
                 SELECT 
-                    message, 
+                    message,
+                    is_image,
                     created_at, 
                     user_id 
                 FROM messages 
@@ -292,6 +294,7 @@ app.get('/api/getContactList', async (req, res): Promise<any> => {
                     avatar: !isGroupChat ? row.avatar : null,
                     isGroupChat: isGroupChat,
                     lastMessage: row.lastmessage,
+                    isImage: row.isimage,
                     lastMessageTime: row.lastmessagetime,
                     lastMessageSender: row.lastmessagesender,
                     members: isGroupChat ? [row.username] : null,
@@ -305,7 +308,7 @@ app.get('/api/getContactList', async (req, res): Promise<any> => {
                 chat.members = [...new Set(chat.members)];
             }
         });
-
+        console.log('chats:',chats)
         res.status(200).json(chats);
     } catch (err) {
         console.error('Error during token verification or database query:', err);
