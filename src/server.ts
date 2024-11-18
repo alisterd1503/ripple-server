@@ -211,7 +211,7 @@ app.get('/api/getUsernameAvatar', async (req, res): Promise<any> => {
 /** Contacts **/
 
 // Retrieves all the chats the current user is part of, including group chats
-app.get('/api/getUserChat', async (req, res): Promise<any> => {
+app.get('/api/getContactList', async (req, res): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
 
     if (!token) return res.status(401).json({ message: 'No token provided' });
@@ -233,7 +233,6 @@ app.get('/api/getUserChat', async (req, res): Promise<any> => {
                 c.description,
                 c.group_avatar,
                 c.is_group_chat,
-                cu.added_at,
                 u.id AS user_id,
                 u.username,
                 u.avatar,
@@ -266,39 +265,35 @@ app.get('/api/getUserChat', async (req, res): Promise<any> => {
         // Group chats by chat ID and format the result
         const chats = data.rows.reduce((acc: any, row: any) => {
             const existingChat = acc.find((chat: any) => chat.chatId === row.chat_id);
-            
+
             if (existingChat) {
-                // Add user to the participants list if it's a group chat
                 if (row.is_group_chat) {
-                    existingChat.participants.push({
-                        userId: row.user_id,
-                        username: row.username,
-                        avatar: row.avatar,
-                        bio: row.bio,
-                    });
+                    existingChat.members.push(row.username);
                 }
             } else {
-                // Create a new chat object
+                const isGroupChat = row.is_group_chat;
+
                 acc.push({
                     chatId: row.chat_id,
-                    title: row.title,
-                    description: row.description,
-                    groupAvatar: row.group_avatar,
-                    isGroupChat: row.is_group_chat,
+                    title: isGroupChat ? row.title : null,
+                    username: !isGroupChat ? row.username : null,
+                    groupAvatar: isGroupChat ? row.group_avatar : null,
+                    avatar: !isGroupChat ? row.avatar : null,
+                    isGroupChat: isGroupChat,
                     lastMessage: row.lastmessage,
                     lastMessageTime: row.lastmessagetime,
                     lastMessageSender: row.lastmessagesender,
-                    added_at: row.added_at,
-                    participants: [{
-                        userId: row.user_id,
-                        username: row.username,
-                        avatar: row.avatar,
-                        bio: row.bio,
-                    }],
+                    members: isGroupChat ? [row.username] : null,
                 });
             }
             return acc;
         }, []);
+
+        chats.forEach((chat: any) => {
+            if (chat.isGroupChat && chat.members) {
+                chat.members = [...new Set(chat.members)];
+            }
+        });
 
         res.status(200).json(chats);
     } catch (err) {
