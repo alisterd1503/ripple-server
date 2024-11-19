@@ -486,6 +486,7 @@ app.get('/api/getGroupProfile', async (req, res): Promise<any> => {
             return res.status(401).json({ message: 'Token is missing user ID' });
         }
 
+        // Query to get the group chat details
         const chatQuery = `
             SELECT 
                 c.title, 
@@ -498,6 +499,20 @@ app.get('/api/getGroupProfile', async (req, res): Promise<any> => {
 
         const chatResult = await pool.query(chatQuery, [chatId]);
         const chatDetails = chatResult.rows[0];
+
+        if (!chatDetails) {
+            return res.status(404).json({ message: 'Chat not found' });
+        }
+
+        // Query to get the 'is_favourite' status for the current user in this group chat
+        const isFavouriteQuery = `
+            SELECT cu.is_favourite
+            FROM chat_users cu
+            WHERE cu.chat_id = $1 AND cu.user_id = $2
+        `;
+        
+        const isFavouriteResult = await pool.query(isFavouriteQuery, [chatId, currentUserId]);
+        const isFavourite = isFavouriteResult.rows.length > 0 ? isFavouriteResult.rows[0].is_favourite : false;
 
         // Retrieve all members of the group chat
         const membersQuery = `
@@ -521,12 +536,13 @@ app.get('/api/getGroupProfile', async (req, res): Promise<any> => {
             added_at: row.added_at,
         }));
 
-        // Construct the response
+        // Construct the response, adding 'is_favourite' for the group chat
         const response: GroupProfile = {
             title: chatDetails.title,
             description: chatDetails.description,
             groupAvatar: chatDetails.group_avatar,
             created_at: chatDetails.created_at,
+            is_favourite: isFavourite, // Include the 'is_favourite' status
             added_at: members.find((member: { userId: number; }) => member.userId === currentUserId)?.added_at || null,
             members,
         };

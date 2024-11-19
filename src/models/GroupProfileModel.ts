@@ -4,6 +4,7 @@ export interface GroupProfile {
     groupAvatar: string;
     created_at: string;
     added_at: string;
+    is_favourite: boolean;
     members: {
       userId: number;
       username: string;
