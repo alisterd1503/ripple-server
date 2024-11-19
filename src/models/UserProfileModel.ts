@@ -4,5 +4,9 @@ export interface UserProfile {
     avatar: string;
     bio: string;
     added_at: string | null;
-    groups_in: number[];
+    groups_in: {
+        chatId: number;
+        title: string;
+        groupAvatar: string;
+    }[];
 }

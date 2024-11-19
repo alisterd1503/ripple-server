@@ -69,7 +69,7 @@ app.get('/api/getUsers', async (req, res): Promise<any> => {
 // Route to start a direct message
 app.post('/api/startChat', async (req, res): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
-    const { userId, username } = req.body;
+    const { userId } = req.body;
 
     if (!token) return res.status(401).json({ message: 'No token provided' });
     if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
@@ -92,16 +92,15 @@ app.post('/api/startChat', async (req, res): Promise<any> => {
         `, [currentUserId, userId]);
 
         if (existingChatResult.rows.length > 0) {
-            // Chat already exists, return the existing chat
             return res.status(200).json({ chatId: existingChatResult.rows[0].id });
         }
 
         // Chat does not exist, create a new one
         const chatResult = await pool.query(`
-            INSERT INTO chats (title, is_group_chat)
-            VALUES ($1, false)
+            INSERT INTO chats (is_group_chat)
+            VALUES (false)
             RETURNING id
-        `, [username]);
+        `);
 
         const chatId = chatResult.rows[0].id;
 
@@ -156,8 +155,6 @@ app.get('/api/getMessages', async (req, res): Promise<any> => {
 app.post('/api/postMessage', upload.single('image'), async (req, res): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
     const { chatId, message } = req.body;
-
-    console.log('mesage log: ',message)
 
     if (!token) return res.status(401).json({ message: 'No token provided' });
     if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
@@ -290,6 +287,7 @@ app.get('/api/getContactList', async (req, res): Promise<any> => {
                     chatId: row.chat_id,
                     title: isGroupChat ? row.title : null,
                     username: !isGroupChat ? row.username : null,
+                    userId: !isGroupChat ? row.user_id : null,
                     groupAvatar: isGroupChat ? row.group_avatar : null,
                     avatar: !isGroupChat ? row.avatar : null,
                     isGroupChat: isGroupChat,
@@ -308,15 +306,10 @@ app.get('/api/getContactList', async (req, res): Promise<any> => {
                 chat.members = [...new Set(chat.members)];
             }
         });
-        console.log('chats:',chats)
+
         res.status(200).json(chats);
     } catch (err) {
         console.error('Error during token verification or database query:', err);
-
-        if (err instanceof jwt.JsonWebTokenError || err instanceof jwt.TokenExpiredError) {
-            return res.status(401).json({ message: 'Invalid or expired token' });
-        }
-
         res.status(500).json({ message: 'Error fetching users chats' });
     }
 });
@@ -388,7 +381,7 @@ app.post('/api/login', async (req, res): Promise<any> => {
 /** Profile **/
 
 app.get('/api/getUserProfile', async (req, res): Promise<any> => {
-    const { chatId } = req.query;
+    const { userId } = req.query;
     const token = req.headers['authorization']?.split(' ')[1];
 
     if (!token) return res.status(401).json({ message: 'No token provided' });
@@ -402,36 +395,62 @@ app.get('/api/getUserProfile', async (req, res): Promise<any> => {
             return res.status(401).json({ message: 'Token is missing user ID' });
         }
 
-        // Retrieve user information from the chat
+        if (!userId) {
+            return res.status(400).json({ message: 'Missing userId parameter' });
+        }
+
+        // Retrieve user profile information
         const userProfileQuery = `
             SELECT 
                 u.id AS user_id, 
                 u.username, 
                 u.avatar, 
-                u.bio, 
-                cu.added_at
+                u.bio
             FROM users u
-            JOIN chat_users cu ON u.id = cu.user_id
-            WHERE cu.chat_id = $1 AND u.id != $2
-            LIMIT 1
+            WHERE u.id = $1
         `;
-        const userProfileResult = await pool.query(userProfileQuery, [chatId, currentUserId]);
+        const userProfileResult = await pool.query(userProfileQuery, [userId]);
         const userProfile = userProfileResult.rows[0];
 
         if (!userProfile) {
-            return res.status(404).json({ message: 'No other users found in this chat' });
+            return res.status(404).json({ message: 'User not found' });
         }
 
-        // Retrieve group chat IDs both users are in (if this is a group chat)
+        // Retrieve the added_at date (direct chat between the two users, not a group chat)
+        const addedAtQuery = `
+            SELECT cu.added_at
+            FROM chat_users cu
+            JOIN chats c ON cu.chat_id = c.id
+            WHERE c.is_group_chat = false
+              AND cu.user_id = $1
+              AND c.id IN (
+                SELECT cu2.chat_id
+                FROM chat_users cu2
+                WHERE cu2.user_id = $2
+              )
+            ORDER BY cu.added_at ASC
+            LIMIT 1
+        `;
+        const addedAtResult = await pool.query(addedAtQuery, [userId, currentUserId]);
+        const addedAt = addedAtResult.rows.length > 0 ? addedAtResult.rows[0].added_at : null;
+
+        // Retrieve detailed group chat information both users are in
         const groupsInQuery = `
-            SELECT c.id AS group_id
+            SELECT 
+                c.id AS chat_id, 
+                c.title, 
+                c.group_avatar
             FROM chats c
             JOIN chat_users cu1 ON c.id = cu1.chat_id AND cu1.user_id = $1
             JOIN chat_users cu2 ON c.id = cu2.chat_id AND cu2.user_id = $2
             WHERE c.is_group_chat = true
         `;
-        const groupsInResult = await pool.query(groupsInQuery, [userProfile.user_id, currentUserId]);
-        const groupsIn = groupsInResult.rows.map((row: { group_id: number }) => row.group_id);
+        const groupsInResult = await pool.query(groupsInQuery, [userId, currentUserId]);
+        const groupsIn = groupsInResult.rows.map((row: { chat_id: number, title: string, group_avatar: string }) => ({
+            chatId: row.chat_id,
+            title: row.title,
+            groupAvatar: row.group_avatar,
+        }));
 
         // Construct the response
         const response: UserProfile = {
@@ -439,13 +458,13 @@ app.get('/api/getUserProfile', async (req, res): Promise<any> => {
             username: userProfile.username,
             avatar: userProfile.avatar,
             bio: userProfile.bio,
-            added_at: userProfile.added_at,
+            added_at: addedAt,
             groups_in: groupsIn,
         };
 
         res.status(200).json(response);
     } catch (err) {
-        console.error('Error fetching user profile:', err)
+        console.error('Error fetching user profile:', err);
         res.status(500).json({ message: 'Error fetching user profile' });
     }
 });
@@ -516,7 +535,6 @@ app.get('/api/getGroupProfile', async (req, res): Promise<any> => {
         res.status(500).json({ message: 'Error fetching group profile' });
     }
 });
-
 
 // Route to remove a friend
 app.post('/api/removeFriend', async (req, res): Promise<any> => {
