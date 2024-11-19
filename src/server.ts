@@ -418,7 +418,7 @@ app.get('/api/getUserProfile', async (req, res): Promise<any> => {
 
         // Retrieve the added_at date (direct chat between the two users, not a group chat)
         const addedAtQuery = `
-            SELECT cu.added_at
+            SELECT cu.added_at, cu.is_favourite
             FROM chat_users cu
             JOIN chats c ON cu.chat_id = c.id
             WHERE c.is_group_chat = false
@@ -431,8 +431,9 @@ app.get('/api/getUserProfile', async (req, res): Promise<any> => {
             ORDER BY cu.added_at ASC
             LIMIT 1
         `;
-        const addedAtResult = await pool.query(addedAtQuery, [userId, currentUserId]);
+        const addedAtResult = await pool.query(addedAtQuery, [currentUserId,userId]);
         const addedAt = addedAtResult.rows.length > 0 ? addedAtResult.rows[0].added_at : null;
+        const isFavourite = addedAtResult.rows.length > 0 ? addedAtResult.rows[0].is_favourite : false;
 
         // Retrieve detailed group chat information both users are in
         const groupsInQuery = `
@@ -460,8 +461,9 @@ app.get('/api/getUserProfile', async (req, res): Promise<any> => {
             bio: userProfile.bio,
             added_at: addedAt,
             groups_in: groupsIn,
+            is_favourite: isFavourite
         };
-
+        //console.log(response)
         res.status(200).json(response);
     } catch (err) {
         console.error('Error fetching user profile:', err);
@@ -533,6 +535,65 @@ app.get('/api/getGroupProfile', async (req, res): Promise<any> => {
     } catch (err) {
         console.error('Error fetching group profile:', err);
         res.status(500).json({ message: 'Error fetching group profile' });
+    }
+});
+
+app.post('/api/favouriteChat', async (req, res): Promise<any> => {
+    const token = req.headers['authorization']?.split(' ')[1];
+    const { chatId, userId, isFavourite } = req.body;
+
+    console.log(chatId, userId, isFavourite)
+
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+
+    try {
+        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+        const currentUserId = decoded.userId;
+
+        if (!currentUserId) {
+            return res.status(401).json({ message: 'Token is missing user ID' });
+        }
+
+        // Validate input
+        if (!chatId && !userId) {
+            return res.status(400).json({ message: 'Either chatId or userId must be provided' });
+        }
+
+        let targetChatId = chatId;
+
+        // If userId is provided, find the chatId for the one-to-one chat between the current user and the provided userId
+        if (userId) {
+            const oneToOneChatQuery = `
+                SELECT c.id AS chat_id
+                FROM chats c
+                JOIN chat_users cu1 ON c.id = cu1.chat_id AND cu1.user_id = $1
+                JOIN chat_users cu2 ON c.id = cu2.chat_id AND cu2.user_id = $2
+                WHERE c.is_group_chat = false
+                LIMIT 1;
+            `;
+            const oneToOneChatResult = await pool.query(oneToOneChatQuery, [currentUserId, userId]);
+
+            if (oneToOneChatResult.rows.length === 0) {
+                return res.status(404).json({ message: 'No one-to-one chat found with the specified user' });
+            }
+
+            targetChatId = oneToOneChatResult.rows[0].chat_id;
+        }
+
+        console.log(isFavourite, targetChatId, currentUserId)
+        // Update the favourite status for the target chatId
+        const updateFavouriteQuery = `
+            UPDATE chat_users
+            SET is_favourite = $1
+            WHERE chat_id = $2 AND user_id = $3;
+        `;
+        await pool.query(updateFavouriteQuery, [isFavourite, targetChatId, currentUserId]);
+
+        res.status(200).json({ message: 'Favourite status updated successfully' });
+    } catch (err) {
+        console.error('Error updating favourite status:', err);
+        res.status(500).json({ error: 'Error updating favourite status' });
     }
 });
 

@@ -44,7 +44,8 @@ const createChatUsersTable = async() => {
                 PRIMARY KEY (chat_id, user_id),
                 chat_id INT REFERENCES chats(id) ON DELETE CASCADE,
                 user_id INT REFERENCES users(id) ON DELETE CASCADE,
-                added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                is_favourite BOOLEAN DEFAULT FALSE
             );
         `);
         console.log('chat_users table created')

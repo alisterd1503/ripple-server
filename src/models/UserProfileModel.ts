@@ -4,6 +4,7 @@ export interface UserProfile {
     avatar: string;
     bio: string;
     added_at: string | null;
+    is_favourite: boolean;
     groups_in: {
         chatId: number;
         title: string;
