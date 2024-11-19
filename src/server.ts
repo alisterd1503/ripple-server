@@ -241,6 +241,7 @@ app.get('/api/getContactList', async (req, res): Promise<any> => {
                 c.description,
                 c.group_avatar,
                 c.is_group_chat,
+                cu.is_favourite,
                 u.id AS user_id,
                 u.username,
                 u.avatar,
@@ -296,6 +297,7 @@ app.get('/api/getContactList', async (req, res): Promise<any> => {
                     lastMessageTime: row.lastmessagetime,
                     lastMessageSender: row.lastmessagesender,
                     members: isGroupChat ? [row.username] : null,
+                    isFavourite: row.is_favourite
                 });
             }
             return acc;
@@ -306,6 +308,8 @@ app.get('/api/getContactList', async (req, res): Promise<any> => {
                 chat.members = [...new Set(chat.members)];
             }
         });
+
+        console.log(chats)
 
         res.status(200).json(chats);
     } catch (err) {
