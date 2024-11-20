@@ -3,10 +3,18 @@ import cors from 'cors'
 import jwt, { JwtPayload } from 'jsonwebtoken';
 import 'dotenv/config'
 import multer from 'multer';
-import validatePassword from './utils/validatePassword';
-import { formatMessages } from './utils/formatMessages';
 import { UserProfile } from './models/UserProfileModel';
 import { GroupProfile } from './models/GroupProfileModel';
+import { getUsers } from './functions/getUsers';
+import { startChat } from './functions/startChat';
+import { getMessages } from './functions/getMessages';
+import { postMessage } from './functions/postMessage';
+import { getUsernameAvatar } from './functions/getUsernameAvatar';
+import { registerUser } from './functions/registerUser';
+import { loginUser } from './functions/loginUser';
+import { getUserProfile } from './functions/getUserProfile';
+import { getGroupProfile } from './functions/getGroupProfile';
+import { favouriteChat } from './functions/favouriteChat';
 
 const app = express();
 const PORT = parseInt(process.env.PORT as string, 10) || 5002;
@@ -39,116 +47,49 @@ initialiseDatabase().then(() => {
     console.error("Error initialising database tables", err);
 });
 
-// Retrieves all the users and their ids
 app.get('/api/getUsers', async (req, res): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
-
     if (!token) return res.status(401).json({ message: 'No token provided' });
-    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
-    
     try {
-        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
-        const currentUserId = decoded.userId;
-
-        if (!currentUserId) {
-            return res.status(401).json({ error: 'Invalid token' });
-        }
-
-        const result = await pool.query(`SELECT id AS "userId", username, avatar FROM users WHERE id != $1;`, [currentUserId]);
-        const data = result.rows;
-
+        const data = await getUsers(token);
         res.status(200).json(data);
     } catch (err) {
-        console.error('Error fetching users:', err);
-        res.status(500).json({ error: 'Error fetching users' });
+        console.error('Error getting users:', err);
+        res.status(500).json({ error: 'Error getting users' });
     }
 });
 
 /** Find & Add User **/
 
-// Route to start a direct message
 app.post('/api/startChat', async (req, res): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
     const { userId } = req.body;
 
-    if (!token) return res.status(401).json({ message: 'No token provided' });
-    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+    if (!token) return res.status(401).json({ message: "No token provided" });
 
     try {
-        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
-        const currentUserId = decoded.userId;
-
-        if (!currentUserId) {
-            return res.status(401).json({ message: 'Token is missing user ID' });
-        }
-
-        // Check if a chat already exists between the two users
-        const existingChatResult = await pool.query(`
-            SELECT c.id 
-            FROM chats c
-            JOIN chat_users cu1 ON c.id = cu1.chat_id AND cu1.user_id = $1
-            JOIN chat_users cu2 ON c.id = cu2.chat_id AND cu2.user_id = $2
-            WHERE c.is_group_chat = false
-        `, [currentUserId, userId]);
-
-        if (existingChatResult.rows.length > 0) {
-            return res.status(200).json({ chatId: existingChatResult.rows[0].id });
-        }
-
-        // Chat does not exist, create a new one
-        const chatResult = await pool.query(`
-            INSERT INTO chats (is_group_chat)
-            VALUES (false)
-            RETURNING id
-        `);
-
-        const chatId = chatResult.rows[0].id;
-
-        // Add both users to the new chat
-        await pool.query(`
-            INSERT INTO chat_users (chat_id, user_id)
-            VALUES ($1, $2), ($1, $3)
-        `, [chatId, currentUserId, userId]);
-
-        res.status(201).json({ chatId });
+        const result = await startChat(token, userId);
+        res.status(201).json(result);
     } catch (err) {
-        console.error('Error starting chat:', err);
-        res.status(500).json({ error: 'Error starting chat' });
+        console.error("Error starting chat:", err);
+        res.status(500).json({ error: "Error starting chat" });
     }
 });
 
 /** Message **/
 
 app.get('/api/getMessages', async (req, res): Promise<any> => {
-    const { chatId } = req.query;
     const token = req.headers['authorization']?.split(' ')[1];
+    const { chatId } = req.query;
 
-    if (!token) return res.status(401).json({ message: 'No token provided' });
-    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+    if (!token) return res.status(401).json({ message: "No token provided" });
 
     try {
-
-        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
-        const currentUserId = decoded.userId;
-
-        if (!currentUserId) {
-            return res.status(401).json({ message: 'Token is missing user ID' });
-        }
-
-        const data = await pool.query(`
-            SELECT m.message, m.created_at, m.user_id, m.is_image, u.username, u.avatar
-            FROM messages m
-            JOIN users u ON m.user_id = u.id
-            WHERE m.chat_id = $1
-            ORDER BY m.created_at ASC
-        `, [chatId]);
-
-        const messages = formatMessages(data.rows, currentUserId)
-
+        const messages = await getMessages(token, Number(chatId));
         res.status(200).json(messages);
     } catch (err) {
-        console.error('Error fetching messages:', err);
-        res.status(500).json({ error: 'Error fetching messages' });
+        console.error("Error fetching messages:", err);
+        res.status(500).json({ error: "Error fetching messages" });
     }
 });
 
@@ -157,58 +98,23 @@ app.post('/api/postMessage', upload.single('image'), async (req, res): Promise<a
     const { chatId, message } = req.body;
 
     if (!token) return res.status(401).json({ message: 'No token provided' });
-    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
 
     try {
-        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
-        const currentUserId = decoded.userId;
-
-        if (!currentUserId) {
-            return res.status(401).json({ message: 'Token is missing user ID' });
-        }
-
-        const isImage = !!req.file;
-        const content = isImage && req.file ? `/uploads/${req.file.filename}` : message;
-
-
-        const insertResult = await pool.query(
-            `INSERT INTO messages (chat_id, user_id, message, is_image) 
-             VALUES ($1, $2, $3, $4) RETURNING *`,
-            [chatId, currentUserId, content, isImage]
-        );
-
-        res.status(201).json({
-            ...insertResult.rows[0],
-            imageUrl: isImage ? content : null,
-        });
+        const result = await postMessage(token, Number(chatId), message, req.file);
+        res.status(201).json(result);
     } catch (err) {
         console.error('Error posting message:', err);
         res.status(500).json({ error: 'Error posting message' });
     }
 });
 
-// To retrieve the current users username and avatar
 app.get('/api/getUsernameAvatar', async (req, res): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
 
     if (!token) return res.status(401).json({ message: 'No token provided' });
-    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
-    
+
     try {
-        const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
-        const currentUserId = decoded.userId;
-
-        if (!currentUserId) {
-            return res.status(401).json({ error: 'Invalid token' });
-        }
-
-        const query = `
-            SELECT username, avatar FROM users WHERE id = $1
-        `;
-
-        const result = await pool.query(query, [currentUserId]);
-        const data = result.rows[0];
-
+        const data = await getUsernameAvatar(token);
         res.status(200).json(data);
     } catch (err) {
         console.error('Error fetching username:', err);
@@ -309,8 +215,6 @@ app.get('/api/getContactList', async (req, res): Promise<any> => {
             }
         });
 
-        console.log(chats)
-
         res.status(200).json(chats);
     } catch (err) {
         console.error('Error during token verification or database query:', err);
@@ -321,64 +225,44 @@ app.get('/api/getContactList', async (req, res): Promise<any> => {
 /** AUTHENTICATION **/
 
 // Route to register new user
-app.post('/api/register', async (req, res): Promise<any> => {
+app.post('/api/registerUser', async (req, res): Promise<any> => {
     const body = {
         username: req.body.username,
         password: req.body.password,
     };
 
     try {
-        // Validating Usernames
-        const existingUser = await pool.query('SELECT * FROM users WHERE username = $1', [body.username]);
-        if (existingUser.rows.length > 0) return res.status(400).json({ message: 'Username already exists' });
-        if ((body.username).trim().length < 1) return res.status(400).json({message: 'Username must be at least one character long.'});
-        if (/\s/.test(body.username)) return res.status(400).json({ message: 'Username cannot contain spaces.'})
+        const response = await registerUser(body);
 
-         // Validating Password
-         const passwordValidation = validatePassword(body.password);
-         if (!passwordValidation.valid) {
-             return res.status(400).json({ message: passwordValidation.message });
-         }
-        
-        const insertResult = await pool.query(
-            'INSERT INTO users (username, password) VALUES ($1, $2) RETURNING *',
-            [body.username, body.password]
-        );
-        res.status(201).json(insertResult.rows[0]);
+        if (response.success) {
+            res.status(201).json({ message: response.message });
+        } else {
+            res.status(400).json({ success: false, message: response.message });
+        }
     } catch (err) {
         console.error('Error registering user:', err);
-        res.status(500).json({ error: 'Error registering user' });
+        res.status(500).json({ success: false, message: 'Error registering user' });
     }
 });
 
 // Route to login user
-app.post('/api/login', async (req, res): Promise<any> => {
-
+app.post('/api/loginUser', async (req, res): Promise<any> => {
     const body = {
         username: req.body.username,
         password: req.body.password,
     };
 
     try {
-        const result = await pool.query('SELECT * FROM users WHERE username = $1', [body.username]);
-        const user = result.rows[0];
-        
-        if (!user) return res.status(401).json({ message: 'Username not found' });
-        if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' })
+        const response = await loginUser(body);
 
-        if (body.password === user.password) {
-            const token = jwt.sign(
-                { userId: user.id, username: user.username, role: user.role },
-                jwtSecret,
-                { expiresIn: '4h' }
-              );
-            res.status(200).json({ token });
+        if (response.success) {
+            res.status(200).json({ success: true, message: response.message, token: response.token });
         } else {
-            res.status(401).json({ message: 'Invalid password.' });
+            res.status(401).json({ success: false, message: response.message });
         }
     } catch (err) {
         console.error('Error logging in:', err);
-        res.status(500).json({ error: 'Error logging in' });
+        res.status(500).json({ success: false, message: 'Error logging in' });
     }
 });
 
@@ -388,105 +272,34 @@ app.get('/api/getUserProfile', async (req, res): Promise<any> => {
     const { userId } = req.query;
     const token = req.headers['authorization']?.split(' ')[1];
 
-    if (!token) return res.status(401).json({ message: 'No token provided' });
-    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+    if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ success: false, message: 'JWT secret not found' });
 
     try {
         const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
         const currentUserId = decoded.userId;
 
         if (!currentUserId) {
-            return res.status(401).json({ message: 'Token is missing user ID' });
+            return res.status(401).json({ success: false, message: 'Token is missing user ID' });
         }
 
         if (!userId) {
-            return res.status(400).json({ message: 'Missing userId parameter' });
+            return res.status(400).json({ success: false, message: 'Missing userId parameter' });
         }
 
-        // Retrieve user profile information
-        const userProfileQuery = `
-            SELECT 
-                u.id AS user_id, 
-                u.username, 
-                u.avatar, 
-                u.bio
-            FROM users u
-            WHERE u.id = $1
-        `;
-        const userProfileResult = await pool.query(userProfileQuery, [userId]);
-        const userProfile = userProfileResult.rows[0];
+        const response = await getUserProfile(currentUserId, parseInt(userId as string));
 
-        if (!userProfile) {
-            return res.status(404).json({ message: 'User not found' });
+        if (response.success) {
+            res.status(200).json(response.data);
+        } else {
+            res.status(404).json({success: false, message: response.message});
         }
-
-        // Retrieve the added_at date (direct chat between the two users, not a group chat)
-        const addedAtQuery = `
-            SELECT cu.added_at, cu.is_favourite
-            FROM chat_users cu
-            JOIN chats c ON cu.chat_id = c.id
-            WHERE c.is_group_chat = false
-              AND cu.user_id = $1
-              AND c.id IN (
-                SELECT cu2.chat_id
-                FROM chat_users cu2
-                WHERE cu2.user_id = $2
-              )
-            ORDER BY cu.added_at ASC
-            LIMIT 1
-        `;
-        const addedAtResult = await pool.query(addedAtQuery, [currentUserId,userId]);
-        const addedAt = addedAtResult.rows.length > 0 ? addedAtResult.rows[0].added_at : null;
-        const isFavourite = addedAtResult.rows.length > 0 ? addedAtResult.rows[0].is_favourite : false;
-
-        const groupsInQuery = `
-        SELECT 
-            c.id AS chat_id, 
-            c.title, 
-            c.group_avatar
-        FROM chats c
-        JOIN chat_users cu1 ON c.id = cu1.chat_id AND cu1.user_id = $1
-        JOIN chat_users cu2 ON c.id = cu2.chat_id AND cu2.user_id = $2
-        WHERE c.is_group_chat = true
-        `;
-        const groupsInResult = await pool.query(groupsInQuery, [userId, currentUserId]);
-        
-        // Fetch members for each group chat
-        const groupsInWithMembers = await Promise.all(
-            groupsInResult.rows.map(async (group: { chat_id: number, title: string, group_avatar: string }) => {
-                const membersQuery = `
-                    SELECT 
-                        u.username 
-                    FROM users u
-                    JOIN chat_users cu ON u.id = cu.user_id
-                    WHERE cu.chat_id = $1
-                `;
-                const membersResult = await pool.query(membersQuery, [group.chat_id]);
-                const members = membersResult.rows.map((row: { username: string }) => row.username);
-        
-                return {
-                    chatId: group.chat_id,
-                    title: group.title,
-                    groupAvatar: group.group_avatar,
-                    members,
-                };
-            })
-        );
-        
-        const response: UserProfile = {
-            userId: userProfile.user_id,
-            username: userProfile.username,
-            avatar: userProfile.avatar,
-            bio: userProfile.bio,
-            added_at: addedAt,
-            groups_in: groupsInWithMembers,
-            is_favourite: isFavourite,
-        };
-
-        res.status(200).json(response);
     } catch (err) {
         console.error('Error fetching user profile:', err);
-        res.status(500).json({ message: 'Error fetching user profile' });
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching user profile',
+        });
     }
 });
 
@@ -494,82 +307,34 @@ app.get('/api/getGroupProfile', async (req, res): Promise<any> => {
     const { chatId } = req.query;
     const token = req.headers['authorization']?.split(' ')[1];
 
-    if (!token) return res.status(401).json({ message: 'No token provided' });
-    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+    if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ success: false, message: 'JWT secret not found' });
 
     try {
         const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
         const currentUserId = decoded.userId;
 
         if (!currentUserId) {
-            return res.status(401).json({ message: 'Token is missing user ID' });
+            return res.status(401).json({ success: false, message: 'Token is missing user ID' });
         }
 
-        // Query to get the group chat details
-        const chatQuery = `
-            SELECT 
-                c.title, 
-                c.description, 
-                c.group_avatar, 
-                c.created_at
-            FROM chats c
-            WHERE c.id = $1 AND c.is_group_chat = true
-        `;
-
-        const chatResult = await pool.query(chatQuery, [chatId]);
-        const chatDetails = chatResult.rows[0];
-
-        if (!chatDetails) {
-            return res.status(404).json({ message: 'Chat not found' });
+        if (!chatId) {
+            return res.status(400).json({ success: false, message: 'Missing chatId parameter' });
         }
 
-        // Query to get the 'is_favourite' status for the current user in this group chat
-        const isFavouriteQuery = `
-            SELECT cu.is_favourite
-            FROM chat_users cu
-            WHERE cu.chat_id = $1 AND cu.user_id = $2
-        `;
-        
-        const isFavouriteResult = await pool.query(isFavouriteQuery, [chatId, currentUserId]);
-        const isFavourite = isFavouriteResult.rows.length > 0 ? isFavouriteResult.rows[0].is_favourite : false;
+        const response = await getGroupProfile(currentUserId, parseInt(chatId as string));
 
-        // Retrieve all members of the group chat
-        const membersQuery = `
-            SELECT 
-                u.id AS user_id,
-                u.username,
-                u.avatar,
-                u.bio,
-                cu.added_at
-            FROM users u
-            JOIN chat_users cu ON u.id = cu.user_id
-            WHERE cu.chat_id = $1
-            ORDER BY cu.added_at ASC
-        `;
-        const membersResult = await pool.query(membersQuery, [chatId]);
-        const members = membersResult.rows.map((row: { user_id: number; username: string; avatar: string; bio: string; added_at: string; }) => ({
-            userId: row.user_id,
-            username: row.username,
-            avatar: row.avatar,
-            bio: row.bio,
-            added_at: row.added_at,
-        }));
-
-        // Construct the response, adding 'is_favourite' for the group chat
-        const response: GroupProfile = {
-            title: chatDetails.title,
-            description: chatDetails.description,
-            groupAvatar: chatDetails.group_avatar,
-            created_at: chatDetails.created_at,
-            is_favourite: isFavourite, // Include the 'is_favourite' status
-            added_at: members.find((member: { userId: number; }) => member.userId === currentUserId)?.added_at || null,
-            members,
-        };
-
-        res.status(200).json(response);
+        if (response.success) {
+            res.status(200).json(response.data);
+        } else {
+            res.status(404).json({ success: false, message: response.message });
+        }
     } catch (err) {
         console.error('Error fetching group profile:', err);
-        res.status(500).json({ message: 'Error fetching group profile' });
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching group profile',
+        });
     }
 });
 
@@ -577,58 +342,30 @@ app.post('/api/favouriteChat', async (req, res): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
     const { chatId, userId, isFavourite } = req.body;
 
-    console.log(chatId, userId, isFavourite)
-
-    if (!token) return res.status(401).json({ message: 'No token provided' });
-    if (!jwtSecret) return res.status(500).json({ error: 'JWT secret not found' });
+    if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
+    if (!jwtSecret) return res.status(500).json({ success: false, message: 'JWT secret not found' });
 
     try {
         const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
         const currentUserId = decoded.userId;
 
         if (!currentUserId) {
-            return res.status(401).json({ message: 'Token is missing user ID' });
+            return res.status(401).json({ success: false, message: 'Token is missing user ID' });
         }
 
-        // Validate input
-        if (!chatId && !userId) {
-            return res.status(400).json({ message: 'Either chatId or userId must be provided' });
+        const response = await favouriteChat(currentUserId, chatId, userId, isFavourite);
+
+        if (response.success) {
+            res.status(200).json({ success: true, message: response.message });
+        } else {
+            res.status(400).json({ success: false, message: response.message });
         }
-
-        let targetChatId = chatId;
-
-        // If userId is provided, find the chatId for the one-to-one chat between the current user and the provided userId
-        if (userId) {
-            const oneToOneChatQuery = `
-                SELECT c.id AS chat_id
-                FROM chats c
-                JOIN chat_users cu1 ON c.id = cu1.chat_id AND cu1.user_id = $1
-                JOIN chat_users cu2 ON c.id = cu2.chat_id AND cu2.user_id = $2
-                WHERE c.is_group_chat = false
-                LIMIT 1;
-            `;
-            const oneToOneChatResult = await pool.query(oneToOneChatQuery, [currentUserId, userId]);
-
-            if (oneToOneChatResult.rows.length === 0) {
-                return res.status(404).json({ message: 'No one-to-one chat found with the specified user' });
-            }
-
-            targetChatId = oneToOneChatResult.rows[0].chat_id;
-        }
-
-        console.log(isFavourite, targetChatId, currentUserId)
-        // Update the favourite status for the target chatId
-        const updateFavouriteQuery = `
-            UPDATE chat_users
-            SET is_favourite = $1
-            WHERE chat_id = $2 AND user_id = $3;
-        `;
-        await pool.query(updateFavouriteQuery, [isFavourite, targetChatId, currentUserId]);
-
-        res.status(200).json({ message: 'Favourite status updated successfully' });
     } catch (err) {
-        console.error('Error updating favourite status:', err);
-        res.status(500).json({ error: 'Error updating favourite status' });
+        console.error('Error handling favouriteChat request:', err);
+        res.status(500).json({
+            success: false,
+            message: 'Error handling favouriteChat request',
+        });
     }
 });
 
