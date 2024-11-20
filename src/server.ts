@@ -439,35 +439,50 @@ app.get('/api/getUserProfile', async (req, res): Promise<any> => {
         const addedAt = addedAtResult.rows.length > 0 ? addedAtResult.rows[0].added_at : null;
         const isFavourite = addedAtResult.rows.length > 0 ? addedAtResult.rows[0].is_favourite : false;
 
-        // Retrieve detailed group chat information both users are in
         const groupsInQuery = `
-            SELECT 
-                c.id AS chat_id, 
-                c.title, 
-                c.group_avatar
-            FROM chats c
-            JOIN chat_users cu1 ON c.id = cu1.chat_id AND cu1.user_id = $1
-            JOIN chat_users cu2 ON c.id = cu2.chat_id AND cu2.user_id = $2
-            WHERE c.is_group_chat = true
+        SELECT 
+            c.id AS chat_id, 
+            c.title, 
+            c.group_avatar
+        FROM chats c
+        JOIN chat_users cu1 ON c.id = cu1.chat_id AND cu1.user_id = $1
+        JOIN chat_users cu2 ON c.id = cu2.chat_id AND cu2.user_id = $2
+        WHERE c.is_group_chat = true
         `;
         const groupsInResult = await pool.query(groupsInQuery, [userId, currentUserId]);
-        const groupsIn = groupsInResult.rows.map((row: { chat_id: number, title: string, group_avatar: string }) => ({
-            chatId: row.chat_id,
-            title: row.title,
-            groupAvatar: row.group_avatar,
-        }));
-
-        // Construct the response
+        
+        // Fetch members for each group chat
+        const groupsInWithMembers = await Promise.all(
+            groupsInResult.rows.map(async (group: { chat_id: number, title: string, group_avatar: string }) => {
+                const membersQuery = `
+                    SELECT 
+                        u.username 
+                    FROM users u
+                    JOIN chat_users cu ON u.id = cu.user_id
+                    WHERE cu.chat_id = $1
+                `;
+                const membersResult = await pool.query(membersQuery, [group.chat_id]);
+                const members = membersResult.rows.map((row: { username: string }) => row.username);
+        
+                return {
+                    chatId: group.chat_id,
+                    title: group.title,
+                    groupAvatar: group.group_avatar,
+                    members,
+                };
+            })
+        );
+        
         const response: UserProfile = {
             userId: userProfile.user_id,
             username: userProfile.username,
             avatar: userProfile.avatar,
             bio: userProfile.bio,
             added_at: addedAt,
-            groups_in: groupsIn,
-            is_favourite: isFavourite
+            groups_in: groupsInWithMembers,
+            is_favourite: isFavourite,
         };
-        //console.log(response)
+
         res.status(200).json(response);
     } catch (err) {
         console.error('Error fetching user profile:', err);
