@@ -1,4 +1,4 @@
-const { pool } = require("../database");
+const { pool } = require('../../database');
 
 export const startChat = async (currentUserId: number, userId: number): Promise<{ chatId: number }> => {
 

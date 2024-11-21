@@ -1,4 +1,4 @@
-const { pool } = require("../database");
+const { pool } = require('../../../database');
 
 export const removeFriend = async (currentUserId: number, userId: number): Promise<{ success: boolean; message: string }> => {
     try {

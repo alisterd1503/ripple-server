@@ -1,4 +1,4 @@
-const { pool } = require("../database");
+const { pool } = require('../../database');
 
 export const uploadPhoto = async (
     currentUserId: number,

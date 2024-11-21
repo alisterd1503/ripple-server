@@ -1,4 +1,4 @@
-const { pool } = require("../database");
+const { pool } = require('../../database');
 
 export const getUsers = async (currentUserId: number): Promise<{ userId: number; username: string; avatar: string }[]> => {
 

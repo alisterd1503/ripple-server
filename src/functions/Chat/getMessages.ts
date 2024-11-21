@@ -1,6 +1,7 @@
-import { MessageModel } from "../models/MessageModel";
-import { formatMessages } from "../utils/formatMessages";
-const { pool } = require("../database");
+import { MessageModel } from "../../models/MessageModel";
+import { formatMessages } from "../../utils/formatMessages";
+
+const { pool } = require('../../database');
 
 export const getMessages = async (currentUserId: number, chatId: number): Promise<MessageModel[]> => {
 

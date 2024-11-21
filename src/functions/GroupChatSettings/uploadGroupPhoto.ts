@@ -1,4 +1,4 @@
-const { pool } = require("../database");
+const { pool } = require('../../database');
 
 export const uploadGroupPhoto = async (chatId: number, file: Express.Multer.File | undefined): Promise<{ success: boolean; message: string; avatarPath?: string }> => {
     try {

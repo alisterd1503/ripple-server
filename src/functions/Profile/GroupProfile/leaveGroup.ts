@@ -1,4 +1,4 @@
-const { pool } = require("../database");
+const { pool } = require('../../../database');
 
 export const leaveGroup = async (chatId: number, userId: number): Promise<{ success: boolean; message: string }> => {
     try {

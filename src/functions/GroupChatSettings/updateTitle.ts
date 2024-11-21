@@ -1,4 +1,4 @@
-const { pool } = require("../database");
+const { pool } = require('../../database');
 
 export const updateTitle = async (chatId: number, title: string): Promise<{ success: boolean; message: string }> => {
     try {

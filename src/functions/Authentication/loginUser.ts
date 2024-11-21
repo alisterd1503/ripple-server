@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-const { pool } = require("../database");
+const { pool } = require('../../database');
 
 const jwtSecret = process.env.JWT_SECRET || 'setPassword';
 

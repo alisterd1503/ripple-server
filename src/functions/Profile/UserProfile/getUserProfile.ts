@@ -1,6 +1,5 @@
-import { UserProfile } from "../models/UserProfileModel";
-
-const { pool } = require("../database");
+import { UserProfile } from "../../../models/UserProfileModel";
+const { pool } = require('../../../database');
 
 export const getUserProfile = async (currentUserId: number, userId: number): Promise<{ success: boolean; message: string; data?: UserProfile }> => {
     try {

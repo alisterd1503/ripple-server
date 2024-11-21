@@ -1,5 +1,5 @@
-import { GroupProfile } from "../models/GroupProfileModel";
-const { pool } = require("../database");
+import { GroupProfile } from "../../../models/GroupProfileModel";
+const { pool } = require('../../../database');
 
 export const getGroupProfile = async (currentUserId: number, chatId: number): Promise<{ success: boolean; message: string; data?: GroupProfile }> => {
     try {

@@ -1,5 +1,5 @@
-import validatePassword from "../utils/validatePassword";
-const { pool } = require("../database");
+import validatePassword from "../../utils/validatePassword";
+const { pool } = require('../../database');
 
 interface RegisterUserRequest {
     username: string;
