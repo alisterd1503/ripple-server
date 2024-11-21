@@ -1,10 +1,6 @@
-import { verifyToken } from "../services/jwtService";
 const { pool } = require("../database");
 
-export const startChat = async (token: string, userId: number): Promise<{ chatId: number }> => {
-    const currentUserId = verifyToken(token);
-
-    if (!currentUserId) throw new Error("Invalid token");
+export const startChat = async (currentUserId: number, userId: number): Promise<{ chatId: number }> => {
 
     // Check if a chat already exists between the two users
     const existingChatResult = await pool.query(

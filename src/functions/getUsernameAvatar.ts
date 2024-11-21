@@ -1,4 +1,3 @@
-import { verifyToken } from "../services/jwtService";
 const { pool } = require("../database");
 
 interface UsernameAvatarResponse {
@@ -6,10 +5,7 @@ interface UsernameAvatarResponse {
     avatar: string | null;
 }
 
-export const getUsernameAvatar = async (token: string): Promise<UsernameAvatarResponse> => {
-    const currentUserId = verifyToken(token);
-
-    if (!currentUserId) throw new Error("Invalid token");
+export const getUsernameAvatar = async (currentUserId: number): Promise<UsernameAvatarResponse> => {
 
     const query = `
         SELECT username, avatar FROM users WHERE id = $1

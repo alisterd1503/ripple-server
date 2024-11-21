@@ -1,4 +1,3 @@
-import { verifyToken } from "../services/jwtService";
 const { pool } = require("../database");
 
 interface PostMessageResponse {
@@ -12,15 +11,12 @@ interface PostMessageResponse {
 }
 
 export const postMessage = async (
-    token: string,
+    currentUserId: number,
     chatId: number,
     message: string,
     file: Express.Multer.File | undefined
 ): Promise<PostMessageResponse> => {
-    const currentUserId = verifyToken(token);
-
-    if (!currentUserId) throw new Error("Invalid token");
-
+    
     const isImage = !!file;
     const content = isImage && file ? `/uploads/${file.filename}` : message;
 

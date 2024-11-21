@@ -1,6 +1,13 @@
 const { pool } = require("../database");
 
-export const favouriteChat = async (isFavourite: boolean, currentUserId: number, chatId?: number, userId?: number): Promise<{ success: boolean; message: string }> => {
+interface FavouriteChatParams {
+    isFavourite: boolean;
+    currentUserId: number;
+    chatId?: number;
+    userId?: number;
+}
+
+export const favouriteChat = async ({ isFavourite, currentUserId, chatId, userId }: FavouriteChatParams): Promise<{ success: boolean; message: string }> => {
     try {
         if (!chatId && !userId) {
             return { success: false, message: 'Either chatId or userId must be provided' };

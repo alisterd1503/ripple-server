@@ -1,12 +1,8 @@
 import { MessageModel } from "../models/MessageModel";
-import { verifyToken } from "../services/jwtService";
 import { formatMessages } from "../utils/formatMessages";
 const { pool } = require("../database");
 
-export const getMessages = async (token: string, chatId: number): Promise<MessageModel[]> => {
-    const currentUserId = verifyToken(token);
-
-    if (!currentUserId) throw new Error("Invalid token");
+export const getMessages = async (currentUserId: number, chatId: number): Promise<MessageModel[]> => {
 
     const result = await pool.query(
         `
