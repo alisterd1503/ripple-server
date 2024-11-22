@@ -32,16 +32,15 @@ import { getContactList } from './functions/Contacts/getContactList';
 
 const app = express();
 const PORT = parseInt(process.env.PORT as string, 10) || 5002;
-const jwtSecret = process.env.JWT_SECRET;
 const upload = multer({ dest: 'uploads/' })
 app.use('/uploads', express.static('uploads'));
 
-const { pool } = require("./database");
 const {
     createUsersTable,
     createChatsTable,
     createChatUsersTable,
-    createMessagesTable
+    createMessagesTable,
+    createReadReciepts
 } = require('./schema');
 
 // Middleware
@@ -53,6 +52,7 @@ const initialiseDatabase = async () => {
     await createChatsTable();
     await createChatUsersTable();
     await createMessagesTable();
+    await createReadReciepts();
 };
 
 initialiseDatabase().then(() => {

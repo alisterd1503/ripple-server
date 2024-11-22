@@ -8,13 +8,14 @@ export const formatMessages = (data: any[], currentUserId: number): MessageModel
 
         return {
             userId: message.user_id,
-            username: message.username,
+            username: message.sender_username,
             avatar: message.avatar,
             message: message.message,
             isImage: message.is_image,
             createdAt: message.created_at,
             direction,
             position,
+            readBy: message.read_by
         };
     });
 };
