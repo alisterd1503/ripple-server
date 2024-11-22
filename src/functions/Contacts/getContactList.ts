@@ -14,6 +14,8 @@ interface ContactModel {
     lastMessageSender: string | null;
     members: string[] | null;
     isFavourite: boolean;
+    unReadMessages: number;
+    readLastMessage: boolean
 }
 
 // Fetch contacts for a given user
@@ -22,7 +24,7 @@ export const getContactList = async (userId: number): Promise<ContactModel[]> =>
     const contacts: ContactModel[] = [];
     
     try {
-        // Step 1: Fetch all chats the user is part of
+        // Fetch all chats the user is part of
         const chatResults = await pool.query(
             `SELECT chat_id, is_favourite FROM chat_users WHERE user_id = $1`,
             [userId]
@@ -34,9 +36,10 @@ export const getContactList = async (userId: number): Promise<ContactModel[]> =>
             const chatId = chat.chat_id;
             const isFavourite = chat.is_favourite;
 
-            // Step 2: Get the last message for the chat
+            // Get the last message for the chat
             const messageResult = await pool.query(
-                `SELECT 
+                `SELECT
+                    id,
                     message, 
                     is_image, 
                     created_at AS last_message_time, 
@@ -67,12 +70,35 @@ export const getContactList = async (userId: number): Promise<ContactModel[]> =>
                 lastMessageData.lastMessageSender = senderResult.rows[0]?.username || null;
             }
 
-            // Step 3: Fetch chat details
+            // Fetch chat details
             const chatDetails = await pool.query(
                 `SELECT * FROM chats WHERE id = $1`,
                 [chatId]
             );
             const chatData = chatDetails.rows[0];
+
+            const unreadMessages = await pool.query(
+                `SELECT COUNT(*) AS unread_count
+                FROM messages m
+                LEFT JOIN read_receipts rr 
+                    ON m.id = rr.message_id AND rr.user_id = $1
+                WHERE m.chat_id = $2 AND rr.user_id IS NULL;`,
+                [userId, chatId]
+            )
+
+            const unreadCount = unreadMessages.rows[0]?.unread_count;
+
+            const readStatusResult = await pool.query(
+                `SELECT EXISTS (
+                    SELECT 1 
+                    FROM read_receipts 
+                    WHERE message_id = $1 AND user_id = $2
+                ) AS has_read;`,
+                [lastMessage.id, userId]
+            );
+            
+            // Extract the read status
+            const hasRead = readStatusResult.rows[0]?.has_read;
 
             if (chatData.is_group_chat) {
                 // For group chats, fetch all members
@@ -101,6 +127,8 @@ export const getContactList = async (userId: number): Promise<ContactModel[]> =>
                     lastMessageSender: lastMessageData.lastMessageSender,
                     members: members,
                     isFavourite: isFavourite,
+                    unReadMessages: unreadCount,
+                    readLastMessage: hasRead,
                 });
             } else {
                 // For private chats, fetch the other user's details
@@ -129,6 +157,8 @@ export const getContactList = async (userId: number): Promise<ContactModel[]> =>
                     lastMessageSender: lastMessageData.lastMessageSender,
                     members: null,
                     isFavourite: isFavourite,
+                    unReadMessages: unreadCount,
+                    readLastMessage: hasRead
                 });
             }
         }
