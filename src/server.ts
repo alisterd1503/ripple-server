@@ -1,4 +1,4 @@
-const express = require('express')
+import express from 'express';
 const cors = require('cors')
 
 import 'dotenv/config'
