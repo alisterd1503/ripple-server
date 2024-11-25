@@ -1,5 +1,6 @@
-import express from 'express';
-import cors from 'cors'
+const express = require('express')
+const cors = require('cors')
+
 import 'dotenv/config'
 import multer from 'multer';
 
@@ -61,7 +62,7 @@ initialiseDatabase().then(() => {
     console.error("Error initialising database tables", err);
 });
 
-app.get('/api/getUsers', async (req, res): Promise<any> => {
+app.get('/api/getUsers', async (req: any, res: any): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
     if (!token) return res.status(401).json({ message: 'No token provided' });
     const currentUserId = verifyToken(token)
@@ -78,7 +79,7 @@ app.get('/api/getUsers', async (req, res): Promise<any> => {
 
 /** Find & Add User **/
 
-app.post('/api/startChat', async (req, res): Promise<any> => {
+app.post('/api/startChat', async (req: any, res: any): Promise<any> => {
 
     const token = req.headers['authorization']?.split(' ')[1];
     if (!token) return res.status(401).json({ message: 'No token provided' });
@@ -98,7 +99,7 @@ app.post('/api/startChat', async (req, res): Promise<any> => {
 
 /** Message **/
 
-app.get('/api/getMessages', async (req, res): Promise<any> => {
+app.get('/api/getMessages', async (req: any, res: any): Promise<any> => {
 
     const token = req.headers['authorization']?.split(' ')[1];
     if (!token) return res.status(401).json({ message: 'No token provided' });
@@ -118,7 +119,7 @@ app.get('/api/getMessages', async (req, res): Promise<any> => {
     }
 });
 
-app.post('/api/postMessage', upload.single('image'), async (req, res): Promise<any> => {
+app.post('/api/postMessage', upload.single('image'), async (req: any, res: any): Promise<any> => {
 
     const token = req.headers['authorization']?.split(' ')[1];
     if (!token) return res.status(401).json({ message: 'No token provided' });
@@ -136,7 +137,7 @@ app.post('/api/postMessage', upload.single('image'), async (req, res): Promise<a
     }
 });
 
-app.get('/api/getUsernameAvatar', async (req, res): Promise<any> => {
+app.get('/api/getUsernameAvatar', async (req: any, res: any): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
     if (!token) return res.status(401).json({ message: 'No token provided' });
     const currentUserId = verifyToken(token)
@@ -154,7 +155,7 @@ app.get('/api/getUsernameAvatar', async (req, res): Promise<any> => {
 /** Contacts **/
 
 // Retrieves all the chats the current user is part of, including group chats
-app.get('/api/getContactList', async (req, res): Promise<any> => {
+app.get('/api/getContactList', async (req: any, res: any): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
 
     if (!token) return res.status(401).json({ message: 'No token provided' });
@@ -176,7 +177,7 @@ app.get('/api/getContactList', async (req, res): Promise<any> => {
 /** AUTHENTICATION **/
 
 // Route to register new user
-app.post('/api/registerUser', async (req, res): Promise<any> => {
+app.post('/api/registerUser', async (req: any, res: any): Promise<any> => {
     const body = {
         username: req.body.username,
         password: req.body.password,
@@ -197,7 +198,7 @@ app.post('/api/registerUser', async (req, res): Promise<any> => {
 });
 
 // Route to login user
-app.post('/api/loginUser', async (req, res): Promise<any> => {
+app.post('/api/loginUser', async (req: any, res: any): Promise<any> => {
     const body = {
         username: req.body.username,
         password: req.body.password,
@@ -219,7 +220,7 @@ app.post('/api/loginUser', async (req, res): Promise<any> => {
 
 /** Profile **/
 
-app.get('/api/getUserProfile', async (req, res): Promise<any> => {
+app.get('/api/getUserProfile', async (req: any, res: any): Promise<any> => {
 
     const token = req.headers['authorization']?.split(' ')[1];
     if (!token) return res.status(401).json({ message: 'No token provided' });
@@ -249,7 +250,7 @@ app.get('/api/getUserProfile', async (req, res): Promise<any> => {
     }
 });
 
-app.get('/api/getGroupProfile', async (req, res): Promise<any> => {
+app.get('/api/getGroupProfile', async (req: any, res: any): Promise<any> => {
 
     const token = req.headers['authorization']?.split(' ')[1];
     if (!token) return res.status(401).json({ message: 'No token provided' });
@@ -279,7 +280,7 @@ app.get('/api/getGroupProfile', async (req, res): Promise<any> => {
     }
 });
 
-app.post('/api/favouriteChat', async (req, res): Promise<any> => {
+app.post('/api/favouriteChat', async (req: any, res: any): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
     if (!token) return res.status(401).json({ message: 'No token provided' });
     const currentUserId = verifyToken(token)
@@ -305,7 +306,7 @@ app.post('/api/favouriteChat', async (req, res): Promise<any> => {
 });
 
 // Route to remove a friend
-app.post('/api/removeFriend', async (req, res): Promise<any> => {
+app.post('/api/removeFriend', async (req: any, res: any): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
     const { userId } = req.body;
 
@@ -333,7 +334,7 @@ app.post('/api/removeFriend', async (req, res): Promise<any> => {
 /** SETTINGS **/
 
 // Route to get current users profile for settings page
-app.get('/api/getProfile', async (req, res): Promise<any> => {
+app.get('/api/getProfile', async (req: any, res: any): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
 
     if (!token) return res.status(401).json({ message: "No token provided" });
@@ -352,7 +353,7 @@ app.get('/api/getProfile', async (req, res): Promise<any> => {
 
 // Route to update password
 
-app.post('/api/changePassword', async (req, res): Promise<any> => {
+app.post('/api/changePassword', async (req: any, res: any): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
 
     if (!token) return res.status(401).json({ message: "No token provided" });
@@ -386,7 +387,7 @@ app.post('/api/changePassword', async (req, res): Promise<any> => {
 });
 
 // Route to update bio
-app.post('/api/updateBio', async (req, res): Promise<any> => {
+app.post('/api/updateBio', async (req: any, res: any): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
     const { bio } = req.body;
 
@@ -412,7 +413,7 @@ app.post('/api/updateBio', async (req, res): Promise<any> => {
 });
 
 // Route to update username
-app.post('/api/updateUsername', async (req, res): Promise<any> => {
+app.post('/api/updateUsername', async (req: any, res: any): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
     const { username } = req.body;
 
@@ -438,7 +439,7 @@ app.post('/api/updateUsername', async (req, res): Promise<any> => {
 });
 
 // Route to delete profile photo
-app.post('/api/deletePhoto', async (req, res): Promise<any> => {
+app.post('/api/deletePhoto', async (req: any, res: any): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
 
     if (!token) return res.status(401).json({ message: "No token provided" });
@@ -463,7 +464,7 @@ app.post('/api/deletePhoto', async (req, res): Promise<any> => {
 });
 
 // Route to upload profile photo
-app.post('/api/uploadPhoto', upload.single("avatar"), async (req, res): Promise<any> => {
+app.post('/api/uploadPhoto', upload.single("avatar"), async (req: any, res: any): Promise<any> => {
     const token = req.headers["authorization"]?.split(" ")[1];
 
     if (!token) return res.status(401).json({ message: "No token provided" });
@@ -494,7 +495,7 @@ app.post('/api/uploadPhoto', upload.single("avatar"), async (req, res): Promise<
 });
 
 // Route to delete account
-app.post("/api/deleteAccount", async (req, res): Promise<any> => {
+app.post("/api/deleteAccount", async (req: any, res: any): Promise<any> => {
     const token = req.headers["authorization"]?.split(" ")[1];
     const { currentPassword } = req.body;
 
@@ -522,7 +523,7 @@ app.post("/api/deleteAccount", async (req, res): Promise<any> => {
 /** GROUP CHAT **/
 
 // Route to start group chat
-app.post("/api/startGroupChat", upload.single("avatar"), async (req, res): Promise<any> => {
+app.post("/api/startGroupChat", upload.single("avatar"), async (req: any, res: any): Promise<any> => {
     const token = req.headers["authorization"]?.split(" ")[1];
 
     if (!token) return res.status(401).json({ message: "No token provided" });
@@ -561,7 +562,7 @@ app.post("/api/startGroupChat", upload.single("avatar"), async (req, res): Promi
 });
 
 // Route to update group title
-app.post("/api/updateTitle", async (req, res): Promise<any> => {
+app.post("/api/updateTitle", async (req: any, res: any): Promise<any> => {
     const token = req.headers["authorization"]?.split(" ")[1];
     const { chatId, title } = req.body;
 
@@ -586,7 +587,7 @@ app.post("/api/updateTitle", async (req, res): Promise<any> => {
 });
 
 // Route to update description
-app.post("/api/updateDescription", async (req, res): Promise<any> => {
+app.post("/api/updateDescription", async (req: any, res: any): Promise<any> => {
     const token = req.headers["authorization"]?.split(" ")[1];
     const { description, chatId } = req.body;
 
@@ -611,7 +612,7 @@ app.post("/api/updateDescription", async (req, res): Promise<any> => {
 });
 
 // Route to delete group photo
-app.post('/api/deleteGroupPhoto', async (req, res): Promise<any> => {
+app.post('/api/deleteGroupPhoto', async (req: any, res: any): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
     const { chatId } = req.body;
 
@@ -636,7 +637,7 @@ app.post('/api/deleteGroupPhoto', async (req, res): Promise<any> => {
 });
 
 // Route to upload group photo
-app.post('/api/uploadGroupPhoto', upload.single('avatar'), async (req, res): Promise<any> => {
+app.post('/api/uploadGroupPhoto', upload.single('avatar'), async (req: any, res: any): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
     const { chatId } = req.body;
 
@@ -663,7 +664,7 @@ app.post('/api/uploadGroupPhoto', upload.single('avatar'), async (req, res): Pro
 });
 
 // Route to remove user from group
-app.post('/api/leaveGroup', async (req, res): Promise<any> => {
+app.post('/api/leaveGroup', async (req: any, res: any): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
     const { chatId } = req.body;
 
