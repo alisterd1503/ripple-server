@@ -88,14 +88,16 @@ export const getContactList = async (userId: number): Promise<ContactModel[]> =>
 
             const unreadCount = unreadMessages.rows[0]?.unread_count;
 
-            const readStatusResult = await pool.query(
-                `SELECT EXISTS (
-                    SELECT 1 
-                    FROM read_receipts 
-                    WHERE message_id = $1 AND user_id = $2
-                ) AS has_read;`,
-                [lastMessage.id, userId]
-            );
+            const readStatusResult = lastMessage
+                ? await pool.query(
+                    `SELECT EXISTS (
+                        SELECT 1 
+                        FROM read_receipts 
+                        WHERE message_id = $1 AND user_id = $2
+                    ) AS has_read;`,
+                    [lastMessage.id, userId]
+                )
+                : { rows: [{ has_read: false }] };
             
             // Extract the read status
             const hasRead = readStatusResult.rows[0]?.has_read;

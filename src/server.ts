@@ -30,6 +30,7 @@ import { uploadPhoto } from './functions/Settings/uploadPhoto';
 import { verifyToken } from './services/jwtService';
 import { postMessage } from './functions/Chat/postMessage';
 import { getContactList } from './functions/Contacts/getContactList';
+import { AddUser } from './functions/GroupChatSettings/AddUser';
 
 const app = express();
 const PORT = parseInt(process.env.PORT as string, 10) || 5002;
@@ -660,6 +661,29 @@ app.post('/api/uploadGroupPhoto', upload.single('avatar'), async (req: any, res:
     } catch (err) {
         console.error("Error processing uploadGroupPhoto request:", err);
         res.status(500).json({ error: "Error processing uploadGroupPhoto request" });
+    }
+});
+
+app.post("/api/addUser", async (req: any, res: any): Promise<any> => {
+    const token = req.headers["authorization"]?.split(" ")[1];
+    const { users, chatId } = req.body;
+
+    if (!token) return res.status(401).json({ message: "No token provided" });
+
+    try {
+        const currentUserId = verifyToken(token);
+        if (!currentUserId) return res.status(401).json({ message: "Invalid token" });
+
+        const response = await AddUser(Number(chatId), users);
+
+        if (response.success) {
+            res.status(200).json({ message: response.message });
+        } else {
+            res.status(400).json({ message: response.message });
+        }
+    } catch (err) {
+        console.error("Error processing AddUser request:", err);
+        res.status(500).json({ error: "Error processing AddUser request" });
     }
 });
 

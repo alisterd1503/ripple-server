@@ -59,7 +59,6 @@ export const getMessages = async (currentUserId: number, chatId: number): Promis
 
         // Format messages
         const formattedMessages: MessageModel[] = formatMessages(messages, currentUserId);
-        console.log(formattedMessages)
         return formattedMessages;
     } catch (err) {
         // Rollback transaction in case of error
