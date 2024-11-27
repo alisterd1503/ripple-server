@@ -7,6 +7,7 @@ export const formatMessages = (data: any[], currentUserId: number): MessageModel
         const position = "single"
 
         return {
+            id: message.message_id,
             userId: message.user_id,
             username: message.sender_username,
             avatar: message.avatar,
