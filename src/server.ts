@@ -31,6 +31,7 @@ import { verifyToken } from './services/jwtService';
 import { postMessage } from './functions/Chat/postMessage';
 import { getContactList } from './functions/Contacts/getContactList';
 import { AddUser } from './functions/GroupChatSettings/AddUser';
+import { getChatHeader } from './functions/Chat/getChatHeader';
 
 const app = express();
 const PORT = parseInt(process.env.PORT as string, 10) || 5002;
@@ -100,6 +101,25 @@ app.post('/api/startChat', async (req: any, res: any): Promise<any> => {
 
 /** Message **/
 
+app.get('/api/getChatHeader', async (req: any, res: any): Promise<any> => {
+    const { chatId } = req.query;
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+
+    try {
+        //Verify the token and get the userId
+        const currentUserId = verifyToken(token);
+        if (!currentUserId) return res.status(401).json({ message: 'Invalid token' });
+
+        // Get the contact list using the refactored function
+        const chats = await getChatHeader(currentUserId,chatId);
+        res.status(200).json(chats);
+    } catch (err) {
+        console.error('Error fetching chat header:', err);
+        res.status(500).json({ message: 'Error fetching chat header' });
+    }
+});
+
 app.get('/api/getMessages', async (req: any, res: any): Promise<any> => {
 
     const token = req.headers['authorization']?.split(' ')[1];
@@ -164,6 +184,7 @@ app.get('/api/getContactList', async (req: any, res: any): Promise<any> => {
     try {
         // Verify the token and get the userId
         const currentUserId = verifyToken(token);
+        console.log(currentUserId)
         if (!currentUserId) return res.status(401).json({ message: 'Invalid token' });
 
         // Get the contact list using the refactored function
