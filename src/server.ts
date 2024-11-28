@@ -185,7 +185,6 @@ app.get('/api/getContactList', async (req: any, res: any): Promise<any> => {
     try {
         // Verify the token and get the userId
         const currentUserId = verifyToken(token);
-        console.log(currentUserId)
         if (!currentUserId) return res.status(401).json({ message: 'Invalid token' });
 
         // Get the contact list using the refactored function

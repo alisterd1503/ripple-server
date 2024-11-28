@@ -19,7 +19,6 @@ export const getProfile = async (currentUserId: number): Promise<ProfileModel> =
     
     const result = await pool.query(query, [currentUserId]);
     const profileData = result.rows[0];
-    console.log(profileData)
 
     return profileData
 };
