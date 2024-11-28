@@ -8,6 +8,7 @@ interface ContactModel {
     groupAvatar: string | null;
     avatar: string | null;
     isGroupChat: boolean;
+    isOnline: boolean;
     lastMessage: string | null;
     isImage: boolean;
     lastMessageTime: string | null;
@@ -18,7 +19,6 @@ interface ContactModel {
     readLastMessage: boolean
 }
 
-// Fetch contacts for a given user
 export const getContactList = async (userId: number): Promise<ContactModel[]> => {
 
     const contacts: ContactModel[] = [];
@@ -131,11 +131,12 @@ export const getContactList = async (userId: number): Promise<ContactModel[]> =>
                     isFavourite: isFavourite,
                     unReadMessages: unreadCount,
                     readLastMessage: hasRead,
+                    isOnline: false,
                 });
             } else {
                 // For private chats, fetch the other user's details
                 const otherUserResult = await pool.query(
-                    `SELECT u.id AS user_id, u.username, u.avatar
+                    `SELECT u.id AS user_id, u.username, u.avatar, u.is_online
                      FROM chat_users cu
                      JOIN users u ON cu.user_id = u.id
                      WHERE cu.chat_id = $1 AND u.id != $2`,
@@ -160,7 +161,8 @@ export const getContactList = async (userId: number): Promise<ContactModel[]> =>
                     members: null,
                     isFavourite: isFavourite,
                     unReadMessages: unreadCount,
-                    readLastMessage: hasRead
+                    readLastMessage: hasRead,
+                    isOnline: otherUser.is_online
                 });
             }
         }

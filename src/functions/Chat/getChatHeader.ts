@@ -7,8 +7,9 @@ interface ChatModel {
     userId: number | null;
     groupAvatar: string | null;
     chatId: number;
-    isGroupChat: boolean | null;
+    isGroupChat: boolean;
     members: string[] | null;
+    isOnline: boolean;
 }
 
 // Fetch contacts for a given user
@@ -47,11 +48,12 @@ export const getChatHeader = async (currentUserId: number, chatId: number): Prom
                 avatar: null,
                 isGroupChat: true,
                 members: members,
+                isOnline: false
             });
         } else {
             // For private chats, fetch the other user's details
             const otherUserResult = await pool.query(
-                `SELECT u.id AS user_id, u.username, u.avatar
+                `SELECT u.id AS user_id, u.username, u.avatar, u.is_online
                     FROM chat_users cu
                     JOIN users u ON cu.user_id = u.id
                     WHERE cu.chat_id = $1 AND u.id != $2`,
@@ -70,6 +72,7 @@ export const getChatHeader = async (currentUserId: number, chatId: number): Prom
                 avatar: otherUser.avatar,
                 isGroupChat: false,
                 members: null,
+                isOnline: otherUser.is_online
             });
         }
         return contacts[0];
