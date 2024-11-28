@@ -9,7 +9,8 @@ export const getUserProfile = async (currentUserId: number, userId: number): Pro
                 u.id AS user_id, 
                 u.username, 
                 u.avatar, 
-                u.bio
+                u.bio,
+                u.is_online
             FROM users u
             WHERE u.id = $1
         `;
@@ -81,6 +82,7 @@ export const getUserProfile = async (currentUserId: number, userId: number): Pro
             added_at: addedAt,
             groups_in: groupsInWithMembers,
             is_favourite: isFavourite,
+            is_online: userProfile.is_online
         };
 
         return { success: true, message: 'User profile fetched successfully', data: response };

@@ -29,5 +29,7 @@ export const loginUser = async (body: LoginUserRequest): Promise<{ success: bool
         { expiresIn: '4h' }
     );
 
+    await pool.query('UPDATE users SET is_online = true WHERE id = $1', [user.id]);
+
     return { success: true, message: 'Login successful', token: token};
 };

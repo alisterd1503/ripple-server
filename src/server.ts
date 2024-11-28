@@ -32,6 +32,7 @@ import { postMessage } from './functions/Chat/postMessage';
 import { getContactList } from './functions/Contacts/getContactList';
 import { AddUser } from './functions/GroupChatSettings/AddUser';
 import { getChatHeader } from './functions/Chat/getChatHeader';
+import { logoutUser } from './functions/Authentication/logoutUser';
 
 const app = express();
 const PORT = parseInt(process.env.PORT as string, 10) || 5002;
@@ -237,6 +238,28 @@ app.post('/api/loginUser', async (req: any, res: any): Promise<any> => {
     } catch (err) {
         console.error('Error logging in:', err);
         res.status(500).json({ success: false, message: 'Error logging in' });
+    }
+});
+
+// Route to logout user
+app.get('/api/logoutUser', async (req: any, res: any): Promise<any> => {
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+
+    let currentUserId;
+    try {
+        currentUserId = verifyToken(token); // Assuming verifyToken throws if invalid
+    } catch (error) {
+        console.error('Token verification failed:', error);
+        return res.status(401).json({ message: 'Invalid or expired token' });
+    }
+
+    try {
+        const data = await logoutUser(currentUserId);
+        res.status(200).json(data);
+    } catch (err) {
+        console.error('Error logging out user:', err);
+        res.status(500).json({ error: 'Error logging out user' });
     }
 });
 

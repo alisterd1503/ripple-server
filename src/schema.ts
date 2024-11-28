@@ -10,7 +10,8 @@ const createUsersTable = async() => {
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 role VARCHAR(50) DEFAULT 'user',
                 bio VARCHAR(100) DEFAULT 'Hey there! I am using ChatApp',
-                avatar VARCHAR(255)
+                avatar VARCHAR(255),
+                is_online BOOLEAN DEFAULT FALSE
             );
         `);
         console.log('users table created')
