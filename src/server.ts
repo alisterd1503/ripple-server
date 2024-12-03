@@ -1,6 +1,4 @@
 import express from 'express';
-const cors = require('cors')
-
 import 'dotenv/config'
 import multer from 'multer';
 
@@ -37,7 +35,13 @@ import { logoutUser } from './functions/Authentication/logoutUser';
 const app = express();
 const PORT = parseInt(process.env.PORT as string, 10) || 5002;
 const upload = multer({ dest: 'uploads/' })
+const cors = require('cors')
+const http = require('http');
+const { Server: WebSocketServer } = require('ws');
+
 app.use('/uploads', express.static('uploads'));
+const { handleOnlineStatus } = require('./functions/Authentication/handleOnlineStatus');
+
 
 const {
     createUsersTable,
@@ -64,6 +68,10 @@ initialiseDatabase().then(() => {
 }).catch(err => {
     console.error("Error initialising database tables", err);
 });
+
+const httpServer = http.createServer(app);
+const wss = new WebSocketServer({ server: httpServer });
+handleOnlineStatus(wss);
 
 app.get('/api/getUsers', async (req: any, res: any): Promise<any> => {
     const token = req.headers['authorization']?.split(' ')[1];
@@ -757,6 +765,6 @@ app.post('/api/leaveGroup', async (req: any, res: any): Promise<any> => {
 /** SERVER **/
 
 // Start server
-app.listen(PORT, '0.0.0.0', () => {
+httpServer.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
 });
