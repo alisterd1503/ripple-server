@@ -28,9 +28,10 @@ import { uploadPhoto } from './functions/Settings/uploadPhoto';
 import { verifyToken } from './services/jwtService';
 import { postMessage } from './functions/Chat/postMessage';
 import { getContactList } from './functions/Contacts/getContactList';
-import { AddUser } from './functions/GroupChatSettings/AddUser';
 import { getChatHeader } from './functions/Chat/getChatHeader';
 import { logoutUser } from './functions/Authentication/logoutUser';
+import { addMembers } from './functions/GroupChatSettings/addMembers';
+import { removeMember } from './functions/GroupChatSettings/removeMember';
 
 const app = express();
 const PORT = parseInt(process.env.PORT as string, 10) || 5002;
@@ -715,7 +716,7 @@ app.post('/api/uploadGroupPhoto', upload.single('avatar'), async (req: any, res:
     }
 });
 
-app.post("/api/addUser", async (req: any, res: any): Promise<any> => {
+app.post("/api/addMembers", async (req: any, res: any): Promise<any> => {
     const token = req.headers["authorization"]?.split(" ")[1];
     const { users, chatId } = req.body;
 
@@ -725,7 +726,30 @@ app.post("/api/addUser", async (req: any, res: any): Promise<any> => {
         const currentUserId = verifyToken(token);
         if (!currentUserId) return res.status(401).json({ message: "Invalid token" });
 
-        const response = await AddUser(Number(chatId), users);
+        const response = await addMembers(Number(chatId), users);
+
+        if (response.success) {
+            res.status(200).json({ message: response.message });
+        } else {
+            res.status(400).json({ message: response.message });
+        }
+    } catch (err) {
+        console.error("Error processing AddUser request:", err);
+        res.status(500).json({ error: "Error processing AddUser request" });
+    }
+});
+
+app.post("/api/removeMember", async (req: any, res: any): Promise<any> => {
+    const token = req.headers["authorization"]?.split(" ")[1];
+    const { userId, chatId } = req.body;
+
+    if (!token) return res.status(401).json({ message: "No token provided" });
+
+    try {
+        const currentUserId = verifyToken(token);
+        if (!currentUserId) return res.status(401).json({ message: "Invalid token" });
+
+        const response = await removeMember(Number(chatId), userId);
 
         if (response.success) {
             res.status(200).json({ message: response.message });
@@ -768,3 +792,7 @@ app.post('/api/leaveGroup', async (req: any, res: any): Promise<any> => {
 httpServer.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
 });
+function RemoveUser(arg0: number, userId: any) {
+    throw new Error('Function not implemented.');
+}
+

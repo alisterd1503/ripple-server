@@ -1,6 +1,6 @@
 const { pool } = require('../../database');
 
-export const AddUser = async (
+export const addMembers = async (
     chatId: number,
     users: { userId: number; username: string }[]
 ): Promise<{ success: boolean; message: string }> => {
