@@ -1,16 +1,5 @@
+import { ChatModel } from "../../models/ChatModel";
 const { pool } = require('../../database');
-
-interface ChatModel {
-    avatar: string | null;
-    title: string | null;
-    username: string | null;
-    userId: number | null;
-    groupAvatar: string | null;
-    chatId: number;
-    isGroupChat: boolean;
-    members: string[] | null;
-    isOnline: boolean;
-}
 
 // Fetch contacts for a given user
 export const getChatHeader = async (currentUserId: number, chatId: number): Promise<ChatModel> => {

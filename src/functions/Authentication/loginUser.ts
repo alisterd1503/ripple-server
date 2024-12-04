@@ -1,14 +1,10 @@
 import jwt from 'jsonwebtoken';
+import { AuthModel } from '../../models/AuthModel';
 const { pool } = require('../../database');
 
 const jwtSecret = process.env.JWT_SECRET || 'setPassword';
 
-interface LoginUserRequest {
-    username: string;
-    password: string;
-}
-
-export const loginUser = async (body: LoginUserRequest): Promise<{ success: boolean; message: string, token?: string }> => {
+export const loginUser = async (body: AuthModel): Promise<{ success: boolean; message: string, token?: string }> => {
     // Check if user exists in the database
     const result = await pool.query('SELECT * FROM users WHERE username = $1', [body.username]);
     const user = result.rows[0];

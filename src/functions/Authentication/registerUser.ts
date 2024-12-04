@@ -1,12 +1,8 @@
+import { AuthModel } from "../../models/AuthModel";
 import validatePassword from "../../utils/validatePassword";
 const { pool } = require('../../database');
 
-interface RegisterUserRequest {
-    username: string;
-    password: string;
-}
-
-export const registerUser = async (body: RegisterUserRequest): Promise<{ success: boolean; message: string }> => {
+export const registerUser = async (body: AuthModel): Promise<{ success: boolean; message: string }> => {
     
     // Validating Usernames
     const existingUser = await pool.query('SELECT * FROM users WHERE username = $1', [body.username]);
