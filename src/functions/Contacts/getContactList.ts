@@ -65,7 +65,8 @@ export const getContactList = async (userId: number): Promise<ContactModel[]> =>
                 FROM messages m
                 LEFT JOIN read_receipts rr 
                     ON m.id = rr.message_id AND rr.user_id = $1
-                WHERE m.chat_id = $2 AND rr.user_id IS NULL;`,
+                WHERE m.chat_id = $2 AND rr.user_id IS NULL
+                AND m.user_id != $1;`,
                 [userId, chatId]
             )
 
